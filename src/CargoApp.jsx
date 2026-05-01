@@ -17,6 +17,17 @@ const STATUSES = [
   { id: "delivered", label: "Delivered", color: "#15803d", bg: "#dcf5e3", border: "#9eddb8", icon: "✅" },
 ];
 
+const VESSEL_EVENTS = [
+  { id: "loading", label: "Loading", icon: "🏗️", color: "#1e40af" },
+  { id: "sailed", label: "Sailed", icon: "🚢", color: "#6b21a8" },
+  { id: "in_transit", label: "In Transit", icon: "🌊", color: "#0e7490" },
+  { id: "berthed", label: "Berthed", icon: "⚓", color: "#a85c00" },
+  { id: "discharging", label: "Discharging", icon: "📤", color: "#a85c00" },
+  { id: "discharged", label: "Discharged", icon: "✅", color: "#15803d" },
+  { id: "delayed", label: "Delayed", icon: "⏰", color: "#c0392b" },
+  { id: "other", label: "Other", icon: "📝", color: "#5a6a7a" },
+];
+
 const initialForm = {
   shipper: "", consignee: "", gst_number: "", eway_bill: "",
   quantity: "", goods_description: "", container_no: "", vehicle_number: "",
@@ -39,18 +50,60 @@ function formatDate(dateStr) {
   } catch { return dateStr; }
 }
 
+function formatDateTime(d) {
+  return new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function timeAgo(d) {
+  const sec = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+  if (sec < 60) return "just now";
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`;
+  return formatDate(d);
+}
+
 function getStatusInfo(id) {
   return STATUSES.find(s => s.id === id) || STATUSES[0];
 }
 
-function downloadFile(content, filename, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+function getVesselEvent(id) {
+  return VESSEL_EVENTS.find(e => e.id === id) || VESSEL_EVENTS[VESSEL_EVENTS.length - 1];
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from(rawData, c => c.charCodeAt(0));
+}
+
+async function logActivity({ action, entityType, entityId, containerNo, details, userEmail }) {
+  try {
+    await supabase.from("activity_log").insert({
+      action, entity_type: entityType, entity_id: entityId,
+      container_no: containerNo, details, user_email: userEmail,
+    });
+  } catch (err) {
+    console.error("Activity log failed:", err);
+  }
+}
+
+async function sendPushNotification(title, body, excludeUserId) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ title, body, excludeUserId }),
+    });
+  } catch (err) {
+    console.error("Push send failed:", err);
+  }
 }
 
 function Badge({ children, color = "navy" }) {
@@ -103,15 +156,9 @@ function ContainerCard({ containerNo, entries, meta, onEdit, onDelete, onUpdateS
         cursor: "pointer", userSelect: "none",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
-          <div style={{
-            width: "36px", height: "36px", borderRadius: "8px",
-            background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)",
-            display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0,
-          }}>🚢</div>
+          <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>🚢</div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "15px", fontWeight: 700, color: OFFWHITE, letterSpacing: "0.1em" }}>
-              {containerNo}
-            </div>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "15px", fontWeight: 700, color: OFFWHITE, letterSpacing: "0.1em" }}>{containerNo}</div>
             <div style={{ fontSize: "11px", color: "rgba(240,237,240,0.6)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {meta?.vessel_name ? `🛳 ${meta.vessel_name}${meta.voyage_number ? ` · V-${meta.voyage_number}` : ""} · ` : ""}Vehicle: {vehicle}
             </div>
@@ -127,37 +174,21 @@ function ContainerCard({ containerNo, entries, meta, onEdit, onDelete, onUpdateS
         <div style={{ padding: "14px 16px", background: OFFWHITE }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px", alignItems: "center" }}>
             <div style={{ position: "relative" }}>
-              <button onClick={(e) => { e.stopPropagation(); setStatusMenu(!statusMenu); }}
-                style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
+              <button onClick={(e) => { e.stopPropagation(); setStatusMenu(!statusMenu); }} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
                 <StatusBadge status={status} />
               </button>
               {statusMenu && (
-                <div style={{
-                  position: "absolute", top: "100%", left: 0, marginTop: "4px",
-                  background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "8px",
-                  boxShadow: "0 4px 16px rgba(13,30,60,0.15)", zIndex: 50, minWidth: "150px",
-                }}>
+                <div style={{ position: "absolute", top: "100%", left: 0, marginTop: "4px", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "8px", boxShadow: "0 4px 16px rgba(13,30,60,0.15)", zIndex: 50, minWidth: "150px" }}>
                   {STATUSES.map(s => (
-                    <button key={s.id}
-                      onClick={(e) => { e.stopPropagation(); onUpdateStatus(containerNo, s.id); setStatusMenu(false); }}
-                      style={{
-                        display: "block", width: "100%", textAlign: "left",
-                        padding: "8px 12px", border: "none", background: status === s.id ? s.bg : "#fff",
-                        color: s.color, fontWeight: 600, fontSize: "12px", cursor: "pointer",
-                      }}>{s.icon} {s.label}</button>
+                    <button key={s.id} onClick={(e) => { e.stopPropagation(); onUpdateStatus(containerNo, s.id); setStatusMenu(false); }}
+                      style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", border: "none", background: status === s.id ? s.bg : "#fff", color: s.color, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>{s.icon} {s.label}</button>
                   ))}
                 </div>
               )}
             </div>
             <div style={{ flex: 1 }} />
-            <button onClick={(e) => { e.stopPropagation(); onExportContainer(containerNo); }}
-              style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>
-              📊 Excel
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); onPrint(containerNo); }}
-              style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>
-              🖨 Print
-            </button>
+            <button onClick={(e) => { e.stopPropagation(); onExportContainer(containerNo); }} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>📊 Excel</button>
+            <button onClick={(e) => { e.stopPropagation(); onPrint(containerNo); }} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>🖨 Print</button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -212,12 +243,7 @@ const Field = memo(({ label, field, placeholder, required, half, value, error, o
     <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
       {label} {required && <span style={{ color: "#c0392b" }}>*</span>}
     </label>
-    <input
-      type={type}
-      list={listId}
-      value={value || ""}
-      onChange={e => onChange(field, e.target.value)}
-      placeholder={placeholder}
+    <input type={type} list={listId} value={value || ""} onChange={e => onChange(field, e.target.value)} placeholder={placeholder}
       style={{
         width: "100%", padding: "10px 14px", borderRadius: "8px",
         background: error ? "#fef8f8" : "#fff",
@@ -229,11 +255,7 @@ const Field = memo(({ label, field, placeholder, required, half, value, error, o
       onFocus={e => e.target.style.borderColor = NAVY}
       onBlur={e => e.target.style.borderColor = error ? "#e74c3c" : BORDER}
     />
-    {listId && list && (
-      <datalist id={listId}>
-        {list.map(opt => <option key={opt} value={opt} />)}
-      </datalist>
-    )}
+    {listId && list && <datalist id={listId}>{list.map(opt => <option key={opt} value={opt} />)}</datalist>}
     {error && <div style={{ fontSize: "11px", color: "#c0392b", marginTop: "4px" }}>{error}</div>}
   </div>
 ));
@@ -246,22 +268,14 @@ function Dashboard({ entries, containerMeta }) {
       if (!containers[k]) containers[k] = [];
       containers[k].push(e);
     });
-
-    const statusCounts = STATUSES.map(s => ({
-      name: s.label,
-      value: Object.keys(containers).filter(k => (containerMeta[k]?.status || "stuffing") === s.id).length,
-      color: s.color,
-    }));
-
-    const shipperCounts = {};
-    const consigneeCounts = {};
+    const statusCounts = STATUSES.map(s => ({ name: s.label, value: Object.keys(containers).filter(k => (containerMeta[k]?.status || "stuffing") === s.id).length, color: s.color }));
+    const shipperCounts = {}, consigneeCounts = {};
     entries.forEach(e => {
       shipperCounts[e.shipper] = (shipperCounts[e.shipper] || 0) + 1;
       consigneeCounts[e.consignee] = (consigneeCounts[e.consignee] || 0) + 1;
     });
     const topShippers = Object.entries(shipperCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
     const topConsignees = Object.entries(consigneeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
-
     const monthly = {};
     entries.forEach(e => {
       const d = e.booking_date ? new Date(e.booking_date) : new Date(e.created_at);
@@ -269,12 +283,7 @@ function Dashboard({ entries, containerMeta }) {
       monthly[k] = (monthly[k] || 0) + 1;
     });
     const monthlyData = Object.entries(monthly).sort().slice(-6).map(([k, v]) => ({ month: k.slice(2), count: v }));
-
-    return {
-      totalContainers: Object.keys(containers).length,
-      totalCargos: entries.length,
-      statusCounts, topShippers, topConsignees, monthlyData,
-    };
+    return { totalContainers: Object.keys(containers).length, totalCargos: entries.length, statusCounts, topShippers, topConsignees, monthlyData };
   }, [entries, containerMeta]);
 
   if (entries.length === 0) {
@@ -282,13 +291,12 @@ function Dashboard({ entries, containerMeta }) {
       <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
         <div style={{ fontSize: "40px", marginBottom: "12px" }}>📊</div>
         <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No data to display</div>
-        <div style={{ fontSize: "13px", color: MUTED, marginTop: "6px" }}>Add cargo entries to see your dashboard.</div>
       </div>
     );
   }
 
   const statCard = (label, value) => (
-    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", textAlign: "center", boxShadow: "0 2px 8px rgba(13,30,60,0.05)" }}>
+    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
       <div style={{ fontSize: "11px", color: MUTED, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "4px" }}>{label}</div>
       <div style={{ fontSize: "28px", fontWeight: 700, color: NAVY, fontFamily: "'DM Mono', monospace" }}>{value}</div>
     </div>
@@ -300,22 +308,18 @@ function Dashboard({ entries, containerMeta }) {
         {statCard("Containers", stats.totalContainers)}
         {statCard("Total Cargos", stats.totalCargos)}
       </div>
-
       <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
         <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>📦 Containers by Status</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {stats.statusCounts.map(s => (
-            <div key={s.name} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ width: "90px", fontSize: "12px", color: MUTED, fontWeight: 600 }}>{s.name}</div>
-              <div style={{ flex: 1, height: "20px", background: "#f0edf0", borderRadius: "4px", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${(s.value / Math.max(stats.totalContainers, 1)) * 100}%`, background: s.color, transition: "width 0.3s" }} />
-              </div>
-              <div style={{ width: "30px", textAlign: "right", fontSize: "13px", fontWeight: 700, color: NAVY, fontFamily: "'DM Mono', monospace" }}>{s.value}</div>
+        {stats.statusCounts.map(s => (
+          <div key={s.name} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+            <div style={{ width: "90px", fontSize: "12px", color: MUTED, fontWeight: 600 }}>{s.name}</div>
+            <div style={{ flex: 1, height: "20px", background: "#f0edf0", borderRadius: "4px", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${(s.value / Math.max(stats.totalContainers, 1)) * 100}%`, background: s.color, transition: "width 0.3s" }} />
             </div>
-          ))}
-        </div>
+            <div style={{ width: "30px", textAlign: "right", fontSize: "13px", fontWeight: 700, color: NAVY, fontFamily: "'DM Mono', monospace" }}>{s.value}</div>
+          </div>
+        ))}
       </div>
-
       {stats.monthlyData.length > 1 && (
         <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
           <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>📅 Cargos Per Month</div>
@@ -330,7 +334,6 @@ function Dashboard({ entries, containerMeta }) {
           </ResponsiveContainer>
         </div>
       )}
-
       <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
         <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>🏢 Top Shippers</div>
         {stats.topShippers.map((s, i) => (
@@ -343,7 +346,6 @@ function Dashboard({ entries, containerMeta }) {
           </div>
         ))}
       </div>
-
       <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px" }}>
         <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>🎯 Top Consignees</div>
         {stats.topConsignees.map((s, i) => (
@@ -360,6 +362,187 @@ function Dashboard({ entries, containerMeta }) {
   );
 }
 
+function ActivityTab({ activities }) {
+  if (activities.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
+        <div style={{ fontSize: "40px", marginBottom: "12px" }}>📜</div>
+        <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No activity yet</div>
+        <div style={{ fontSize: "13px", color: MUTED, marginTop: "6px" }}>Actions by you and your team will appear here.</div>
+      </div>
+    );
+  }
+
+  const actionIcons = {
+    cargo_created: { icon: "➕", color: "#15803d", label: "Cargo Added" },
+    cargo_updated: { icon: "✏️", color: "#1e40af", label: "Cargo Updated" },
+    cargo_deleted: { icon: "🗑️", color: "#c0392b", label: "Cargo Deleted" },
+    status_changed: { icon: "🔄", color: "#a85c00", label: "Status Changed" },
+    vessel_movement: { icon: "🚢", color: "#6b21a8", label: "Vessel Movement" },
+  };
+
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "8px" }}>
+      {activities.map((a, i) => {
+        const info = actionIcons[a.action] || { icon: "📝", color: MUTED, label: a.action };
+        const userName = a.user_email ? a.user_email.split("@")[0] : "Someone";
+        return (
+          <div key={a.id} style={{ padding: "12px", borderBottom: i < activities.length - 1 ? `1px solid ${BORDER}` : "none", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+            <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: `${info.color}15`, color: info.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
+              {info.icon}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "13px", color: TEXT, fontWeight: 500 }}>
+                <strong style={{ color: NAVY }}>{userName}</strong> · {info.label}
+                {a.container_no && <span style={{ fontFamily: "'DM Mono', monospace", color: MUTED, fontSize: "12px" }}> · {a.container_no}</span>}
+              </div>
+              {a.details && (
+                <div style={{ fontSize: "12px", color: MUTED, marginTop: "2px" }}>
+                  {a.details.summary || (a.details.shipper && `${a.details.shipper} → ${a.details.consignee}`) || (a.details.from && `${a.details.from} → ${a.details.to}`)}
+                </div>
+              )}
+              <div style={{ fontSize: "11px", color: MUTED, marginTop: "2px" }}>{timeAgo(a.created_at)}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function VesselTab({ vesselMovements, uniqueVessels, userEmail, onAdd, onDelete }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ vessel_name: "", voyage_number: "", event_type: "sailed", event_date: "", location: "", notes: "" });
+  const [submitting, setSubmitting] = useState(false);
+
+  // Group by vessel + voyage
+  const grouped = useMemo(() => {
+    const g = {};
+    vesselMovements.forEach(m => {
+      const key = `${m.vessel_name}|${m.voyage_number || "-"}`;
+      if (!g[key]) g[key] = { vessel_name: m.vessel_name, voyage_number: m.voyage_number, events: [] };
+      g[key].events.push(m);
+    });
+    Object.values(g).forEach(v => v.events.sort((a, b) => new Date(b.event_date) - new Date(a.event_date)));
+    return Object.values(g).sort((a, b) => {
+      const aLatest = a.events[0]?.event_date || 0;
+      const bLatest = b.events[0]?.event_date || 0;
+      return new Date(bLatest) - new Date(aLatest);
+    });
+  }, [vesselMovements]);
+
+  const handleSubmit = async () => {
+    if (!form.vessel_name.trim() || !form.event_date) return;
+    setSubmitting(true);
+    await onAdd({ ...form });
+    setForm({ vessel_name: "", voyage_number: "", event_type: "sailed", event_date: "", location: "", notes: "" });
+    setShowForm(false);
+    setSubmitting(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+        <div>
+          <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>🚢 Vessel Movements</h2>
+          <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>{grouped.length} voyage{grouped.length !== 1 ? "s" : ""} tracked</p>
+        </div>
+        <button onClick={() => setShowForm(!showForm)} style={{
+          padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+          background: showForm ? "#fff" : `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`,
+          border: showForm ? `1px solid ${BORDER}` : "none",
+          color: showForm ? NAVY : OFFWHITE, cursor: "pointer",
+        }}>{showForm ? "✕ Cancel" : "+ Add Movement"}</button>
+      </div>
+
+      {showForm && (
+        <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div style={{ gridColumn: "span 1" }}>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Vessel Name *</label>
+              <input list="vessels-list-mov" value={form.vessel_name} onChange={e => setForm({ ...form, vessel_name: e.target.value })} placeholder="e.g. MV APJ Karan 2"
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff" }} />
+              <datalist id="vessels-list-mov">{uniqueVessels.map(v => <option key={v} value={v} />)}</datalist>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Voyage No.</label>
+              <input value={form.voyage_number} onChange={e => setForm({ ...form, voyage_number: e.target.value })} placeholder="e.g. 024"
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", fontFamily: "'DM Mono', monospace", background: "#fff" }} />
+            </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Event Type *</label>
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                {VESSEL_EVENTS.map(ev => (
+                  <button key={ev.id} onClick={() => setForm({ ...form, event_type: ev.id })} style={{
+                    padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600,
+                    background: form.event_type === ev.id ? ev.color : "#fff",
+                    color: form.event_type === ev.id ? "#fff" : ev.color,
+                    border: `1px solid ${form.event_type === ev.id ? ev.color : BORDER}`, cursor: "pointer",
+                  }}>{ev.icon} {ev.label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Date & Time *</label>
+              <input type="datetime-local" value={form.event_date} onChange={e => setForm({ ...form, event_date: e.target.value })}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff" }} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Location</label>
+              <input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. Kolkata Port"
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff" }} />
+            </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Notes</label>
+              <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Optional details..." rows={2}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", fontFamily: "inherit", resize: "vertical", background: "#fff" }} />
+            </div>
+          </div>
+          <button onClick={handleSubmit} disabled={submitting || !form.vessel_name.trim() || !form.event_date}
+            style={{ marginTop: "14px", width: "100%", padding: "10px", borderRadius: "8px", background: NAVY, color: "#fff", border: "none", fontWeight: 700, fontSize: "13px", cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1 }}>
+            {submitting ? "Saving..." : "💾 Log Movement"}
+          </button>
+        </div>
+      )}
+
+      {grouped.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
+          <div style={{ fontSize: "40px", marginBottom: "12px" }}>🚢</div>
+          <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No vessel movements logged</div>
+          <div style={{ fontSize: "13px", color: MUTED, marginTop: "6px" }}>Tap "Add Movement" to log vessel events.</div>
+        </div>
+      ) : grouped.map(v => (
+        <div key={`${v.vessel_name}-${v.voyage_number}`} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", marginBottom: "12px", overflow: "hidden" }}>
+          <div style={{ background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`, padding: "12px 16px" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: OFFWHITE }}>🛳 {v.vessel_name}</div>
+            {v.voyage_number && <div style={{ fontSize: "11px", color: "rgba(240,237,240,0.7)", fontFamily: "'DM Mono', monospace", marginTop: "2px" }}>Voyage {v.voyage_number}</div>}
+          </div>
+          <div style={{ padding: "8px" }}>
+            {v.events.map((e, i) => {
+              const ev = getVesselEvent(e.event_type);
+              return (
+                <div key={e.id} style={{ display: "flex", gap: "10px", padding: "10px", alignItems: "flex-start", borderBottom: i < v.events.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                  <div style={{ width: "30px", height: "30px", borderRadius: "50%", background: `${ev.color}15`, color: ev.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", flexShrink: 0 }}>{ev.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: ev.color }}>{ev.label}</span>
+                      {e.location && <span style={{ fontSize: "12px", color: MUTED }}>· 📍 {e.location}</span>}
+                    </div>
+                    <div style={{ fontSize: "11px", color: MUTED, marginTop: "2px" }}>{formatDateTime(e.event_date)}</div>
+                    {e.notes && <div style={{ fontSize: "12px", color: TEXT, marginTop: "4px", padding: "6px 8px", background: OFFWHITE, borderRadius: "4px" }}>{e.notes}</div>}
+                    {e.created_by_email && <div style={{ fontSize: "10px", color: MUTED, marginTop: "4px" }}>Logged by {e.created_by_email.split("@")[0]} · {timeAgo(e.created_at)}</div>}
+                  </div>
+                  <button onClick={() => onDelete(e.id)} style={{ background: "transparent", border: "none", color: "#c0392b", cursor: "pointer", fontSize: "12px", padding: "4px" }}>✕</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PrintView({ containerNo, entries, meta, onClose }) {
   useEffect(() => {
     const t = setTimeout(() => window.print(), 300);
@@ -368,14 +551,7 @@ function PrintView({ containerNo, entries, meta, onClose }) {
 
   return (
     <div style={{ background: "#fff", color: "#000", padding: "32px", fontFamily: "'DM Sans', sans-serif", minHeight: "100vh" }}>
-      <style>{`
-        @media print {
-          @page { size: A4; margin: 15mm; }
-          body { background: #fff !important; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
-
+      <style>{`@media print { @page { size: A4; margin: 15mm; } body { background: #fff !important; } .no-print { display: none !important; } }`}</style>
       <div className="no-print" style={{ marginBottom: "20px", padding: "10px", background: OFFWHITE, borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
         <div style={{ fontSize: "13px", color: MUTED }}>Print preview — use Print to save as PDF</div>
         <div style={{ display: "flex", gap: "8px" }}>
@@ -383,18 +559,14 @@ function PrintView({ containerNo, entries, meta, onClose }) {
           <button onClick={onClose} style={{ padding: "8px 16px", background: "#fff", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", fontWeight: 600, cursor: "pointer" }}>✕ Close</button>
         </div>
       </div>
-
       <div style={{ display: "flex", alignItems: "center", gap: "16px", borderBottom: `2px solid ${NAVY}`, paddingBottom: "16px", marginBottom: "20px" }}>
         <img src="/kraft-logo.png" alt="Kraft" style={{ width: "70px", height: "70px", objectFit: "contain" }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: "20px", fontWeight: 700, color: NAVY }}>Kraft Shipping & Logistics Pvt. Ltd.</div>
           <div style={{ fontSize: "13px", color: MUTED }}>Container Manifest</div>
         </div>
-        <div style={{ textAlign: "right", fontSize: "11px", color: MUTED }}>
-          <div>Generated: {new Date().toLocaleString("en-IN")}</div>
-        </div>
+        <div style={{ textAlign: "right", fontSize: "11px", color: MUTED }}><div>Generated: {new Date().toLocaleString("en-IN")}</div></div>
       </div>
-
       <table style={{ width: "100%", marginBottom: "20px", fontSize: "13px" }}>
         <tbody>
           <tr><td style={{ padding: "6px 0", fontWeight: 600, color: MUTED, width: "150px" }}>CONTAINER NO.</td><td style={{ padding: "6px 0", fontFamily: "'DM Mono', monospace", fontWeight: 700, color: NAVY }}>{containerNo}</td></tr>
@@ -404,18 +576,10 @@ function PrintView({ containerNo, entries, meta, onClose }) {
           <tr><td style={{ padding: "6px 0", fontWeight: 600, color: MUTED }}>TOTAL CARGOS</td><td style={{ padding: "6px 0" }}>{entries.length}</td></tr>
         </tbody>
       </table>
-
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
         <thead>
           <tr style={{ background: NAVY, color: "#fff" }}>
-            <th style={{ padding: "8px", textAlign: "left", border: `1px solid ${NAVY}` }}>#</th>
-            <th style={{ padding: "8px", textAlign: "left", border: `1px solid ${NAVY}` }}>Shipper</th>
-            <th style={{ padding: "8px", textAlign: "left", border: `1px solid ${NAVY}` }}>Consignee</th>
-            <th style={{ padding: "8px", textAlign: "left", border: `1px solid ${NAVY}` }}>GST No.</th>
-            <th style={{ padding: "8px", textAlign: "left", border: `1px solid ${NAVY}` }}>E-Way Bill</th>
-            <th style={{ padding: "8px", textAlign: "left", border: `1px solid ${NAVY}` }}>Qty</th>
-            <th style={{ padding: "8px", textAlign: "left", border: `1px solid ${NAVY}` }}>Goods</th>
-            <th style={{ padding: "8px", textAlign: "left", border: `1px solid ${NAVY}` }}>Date</th>
+            {["#", "Shipper", "Consignee", "GST No.", "E-Way Bill", "Qty", "Goods", "Date"].map(h => <th key={h} style={{ padding: "8px", textAlign: "left", border: `1px solid ${NAVY}` }}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -433,18 +597,6 @@ function PrintView({ containerNo, entries, meta, onClose }) {
           ))}
         </tbody>
       </table>
-
-      {entries.some(e => e.remarks) && (
-        <div style={{ marginTop: "20px" }}>
-          <div style={{ fontSize: "12px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>REMARKS:</div>
-          {entries.map((e, i) => e.remarks && (
-            <div key={e.id} style={{ fontSize: "11px", marginBottom: "4px" }}>
-              <strong>#{i + 1}:</strong> {e.remarks}
-            </div>
-          ))}
-        </div>
-      )}
-
       <div style={{ marginTop: "60px", display: "flex", justifyContent: "space-between", fontSize: "11px", color: MUTED }}>
         <div style={{ borderTop: "1px solid #000", width: "180px", paddingTop: "4px", textAlign: "center" }}>Authorized Signatory</div>
         <div style={{ borderTop: "1px solid #000", width: "180px", paddingTop: "4px", textAlign: "center" }}>Stamp & Seal</div>
@@ -456,6 +608,8 @@ function PrintView({ containerNo, entries, meta, onClose }) {
 export default function CargoApp({ session }) {
   const [entries, setEntries] = useState([]);
   const [containerMeta, setContainerMeta] = useState({});
+  const [activities, setActivities] = useState([]);
+  const [vesselMovements, setVesselMovements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(initialForm);
   const [editId, setEditId] = useState(null);
@@ -470,58 +624,122 @@ export default function CargoApp({ session }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [printContainer, setPrintContainer] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushPrompt, setPushPrompt] = useState(false);
 
   const userEmail = session?.user?.email || "";
+  const userId = session?.user?.id;
 
-  // Load all data and subscribe to real-time updates
   useEffect(() => {
     let mounted = true;
     async function loadAll() {
       const { data: cargoData } = await supabase.from("cargo_entries").select("*").order("created_at", { ascending: false });
       const { data: metaData } = await supabase.from("container_meta").select("*");
+      const { data: activityData } = await supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(200);
+      const { data: vesselData } = await supabase.from("vessel_movements").select("*").order("event_date", { ascending: false });
       if (!mounted) return;
       setEntries(cargoData || []);
       const metaMap = {};
       (metaData || []).forEach(m => { metaMap[m.container_no] = m; });
       setContainerMeta(metaMap);
+      setActivities(activityData || []);
+      setVesselMovements(vesselData || []);
       setLoading(false);
     }
     loadAll();
 
-    // Real-time sync: cargo_entries
     const cargoSub = supabase.channel("cargo-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "cargo_entries" }, (payload) => {
-        if (payload.eventType === "INSERT") {
-          setEntries(prev => prev.find(e => e.id === payload.new.id) ? prev : [payload.new, ...prev]);
-        } else if (payload.eventType === "UPDATE") {
-          setEntries(prev => prev.map(e => e.id === payload.new.id ? payload.new : e));
-        } else if (payload.eventType === "DELETE") {
-          setEntries(prev => prev.filter(e => e.id !== payload.old.id));
-        }
-      })
-      .subscribe();
+        if (payload.eventType === "INSERT") setEntries(prev => prev.find(e => e.id === payload.new.id) ? prev : [payload.new, ...prev]);
+        else if (payload.eventType === "UPDATE") setEntries(prev => prev.map(e => e.id === payload.new.id ? payload.new : e));
+        else if (payload.eventType === "DELETE") setEntries(prev => prev.filter(e => e.id !== payload.old.id));
+      }).subscribe();
 
-    // Real-time sync: container_meta
     const metaSub = supabase.channel("meta-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "container_meta" }, (payload) => {
         if (payload.eventType === "DELETE") {
-          setContainerMeta(prev => {
-            const next = { ...prev };
-            delete next[payload.old.container_no];
-            return next;
-          });
+          setContainerMeta(prev => { const next = { ...prev }; delete next[payload.old.container_no]; return next; });
         } else {
           setContainerMeta(prev => ({ ...prev, [payload.new.container_no]: payload.new }));
         }
-      })
-      .subscribe();
+      }).subscribe();
+
+    const activitySub = supabase.channel("activity-changes")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_log" }, (payload) => {
+        setActivities(prev => [payload.new, ...prev].slice(0, 200));
+      }).subscribe();
+
+    const vesselSub = supabase.channel("vessel-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "vessel_movements" }, (payload) => {
+        if (payload.eventType === "INSERT") setVesselMovements(prev => [payload.new, ...prev]);
+        else if (payload.eventType === "DELETE") setVesselMovements(prev => prev.filter(v => v.id !== payload.old.id));
+      }).subscribe();
 
     return () => {
       mounted = false;
       supabase.removeChannel(cargoSub);
       supabase.removeChannel(metaSub);
+      supabase.removeChannel(activitySub);
+      supabase.removeChannel(vesselSub);
     };
   }, []);
+
+  // Push notification subscription check on mount
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    navigator.serviceWorker.register("/sw.js").then(async (reg) => {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        setPushEnabled(true);
+      } else {
+        const dismissed = localStorage.getItem("push-prompt-dismissed");
+        if (!dismissed && Notification.permission === "default") {
+          setTimeout(() => setPushPrompt(true), 3000);
+        }
+      }
+    }).catch(err => console.error("SW registration failed:", err));
+  }, []);
+
+  const enablePush = async () => {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        showToast("Notifications blocked. Enable from browser settings.", "error");
+        setPushPrompt(false);
+        return;
+      }
+      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        showToast("Push not configured.", "error");
+        return;
+      }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+      const json = sub.toJSON();
+      await supabase.from("push_subscriptions").upsert({
+        user_id: userId,
+        user_email: userEmail,
+        endpoint: json.endpoint,
+        p256dh: json.keys.p256dh,
+        auth: json.keys.auth,
+        user_agent: navigator.userAgent,
+      }, { onConflict: "endpoint" });
+      setPushEnabled(true);
+      setPushPrompt(false);
+      showToast("Notifications enabled! 🔔");
+    } catch (err) {
+      console.error("Enable push failed:", err);
+      showToast("Could not enable notifications: " + err.message, "error");
+    }
+  };
+
+  const dismissPushPrompt = () => {
+    localStorage.setItem("push-prompt-dismissed", "1");
+    setPushPrompt(false);
+  };
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -547,18 +765,12 @@ export default function CargoApp({ session }) {
     if (!validate()) return;
     const containerKey = form.container_no.trim().toUpperCase();
     const payload = {
-      shipper: form.shipper.trim(),
-      consignee: form.consignee.trim(),
-      gst_number: form.gst_number || null,
-      eway_bill: form.eway_bill || null,
-      quantity: form.quantity || null,
-      goods_description: form.goods_description.trim(),
-      container_no: containerKey,
-      vehicle_number: form.vehicle_number || null,
-      booking_date: form.booking_date || null,
-      vessel_name: form.vessel_name || null,
-      voyage_number: form.voyage_number || null,
-      remarks: form.remarks || null,
+      shipper: form.shipper.trim(), consignee: form.consignee.trim(),
+      gst_number: form.gst_number || null, eway_bill: form.eway_bill || null,
+      quantity: form.quantity || null, goods_description: form.goods_description.trim(),
+      container_no: containerKey, vehicle_number: form.vehicle_number || null,
+      booking_date: form.booking_date || null, vessel_name: form.vessel_name || null,
+      voyage_number: form.voyage_number || null, remarks: form.remarks || null,
       created_by_email: userEmail,
     };
 
@@ -566,14 +778,20 @@ export default function CargoApp({ session }) {
       const { error } = await supabase.from("cargo_entries").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", editId);
       if (error) { showToast(error.message, "error"); return; }
       showToast("Cargo entry updated.");
+      logActivity({ action: "cargo_updated", entityType: "cargo", entityId: editId, containerNo: containerKey, details: { shipper: payload.shipper, consignee: payload.consignee }, userEmail });
     } else {
-      const { error } = await supabase.from("cargo_entries").insert(payload);
+      const { data: inserted, error } = await supabase.from("cargo_entries").insert(payload).select().single();
       if (error) { showToast(error.message, "error"); return; }
       const existing = entries.find(e => e.container_no === containerKey);
       showToast(existing ? `Added to container ${containerKey} (LCL grouped).` : "New cargo entry logged.");
+      logActivity({ action: "cargo_created", entityType: "cargo", entityId: inserted?.id, containerNo: containerKey, details: { shipper: payload.shipper, consignee: payload.consignee }, userEmail });
+      sendPushNotification(
+        `📦 New cargo: ${containerKey}`,
+        `${payload.shipper} → ${payload.consignee} (logged by ${userEmail.split("@")[0]})`,
+        userId
+      );
     }
 
-    // Upsert container meta
     const existingMeta = containerMeta[containerKey];
     const metaPayload = {
       container_no: containerKey,
@@ -592,11 +810,7 @@ export default function CargoApp({ session }) {
 
   const handleEdit = (entry) => {
     const meta = containerMeta[entry.container_no] || {};
-    setForm({
-      ...entry,
-      vessel_name: entry.vessel_name || meta.vessel_name || "",
-      voyage_number: entry.voyage_number || meta.voyage_number || "",
-    });
+    setForm({ ...entry, vessel_name: entry.vessel_name || meta.vessel_name || "", voyage_number: entry.voyage_number || meta.voyage_number || "" });
     setEditId(entry.id);
     setActiveTab("entry");
   };
@@ -604,37 +818,60 @@ export default function CargoApp({ session }) {
   const handleDelete = (id) => setDeleteConfirm(id);
 
   const confirmDelete = async () => {
+    const entry = entries.find(e => e.id === deleteConfirm);
     const { error } = await supabase.from("cargo_entries").delete().eq("id", deleteConfirm);
     if (error) { showToast(error.message, "error"); return; }
+    if (entry) logActivity({ action: "cargo_deleted", entityType: "cargo", entityId: deleteConfirm, containerNo: entry.container_no, details: { shipper: entry.shipper }, userEmail });
     setDeleteConfirm(null);
     showToast("Entry deleted.", "error");
   };
 
   const updateContainerStatus = async (containerNo, status) => {
     const existing = containerMeta[containerNo] || { container_no: containerNo };
-    const { error } = await supabase.from("container_meta").upsert({
-      ...existing, container_no: containerNo, status, updated_at: new Date().toISOString(),
-    });
+    const oldStatus = existing.status || "stuffing";
+    const { error } = await supabase.from("container_meta").upsert({ ...existing, container_no: containerNo, status, updated_at: new Date().toISOString() });
     if (error) { showToast(error.message, "error"); return; }
     showToast(`Status updated to ${getStatusInfo(status).label}.`);
+    logActivity({ action: "status_changed", entityType: "container", containerNo, details: { from: getStatusInfo(oldStatus).label, to: getStatusInfo(status).label }, userEmail });
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const addVesselMovement = async (data) => {
+    const payload = {
+      vessel_name: data.vessel_name.trim(),
+      voyage_number: data.voyage_number?.trim() || null,
+      event_type: data.event_type,
+      event_date: new Date(data.event_date).toISOString(),
+      location: data.location?.trim() || null,
+      notes: data.notes?.trim() || null,
+      created_by_email: userEmail,
+    };
+    const { error } = await supabase.from("vessel_movements").insert(payload);
+    if (error) { showToast(error.message, "error"); return; }
+    showToast("Vessel movement logged.");
+    logActivity({
+      action: "vessel_movement", entityType: "vessel",
+      details: { summary: `${data.vessel_name} · ${getVesselEvent(data.event_type).label}${data.location ? ` at ${data.location}` : ""}` },
+      userEmail
+    });
   };
 
-  const grouped = useMemo(() => {
-    return entries.reduce((acc, entry) => {
-      const key = entry.container_no;
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(entry);
-      return acc;
-    }, {});
-  }, [entries]);
+  const deleteVesselMovement = async (id) => {
+    if (!confirm("Delete this movement?")) return;
+    const { error } = await supabase.from("vessel_movements").delete().eq("id", id);
+    if (error) { showToast(error.message, "error"); return; }
+    showToast("Movement deleted.", "error");
+  };
 
+  const handleLogout = async () => { await supabase.auth.signOut(); };
+
+  const grouped = useMemo(() => entries.reduce((acc, entry) => { const key = entry.container_no; if (!acc[key]) acc[key] = []; acc[key].push(entry); return acc; }, {}), [entries]);
   const uniqueShippers = useMemo(() => [...new Set(entries.map(e => e.shipper).filter(Boolean))].sort(), [entries]);
   const uniqueConsignees = useMemo(() => [...new Set(entries.map(e => e.consignee).filter(Boolean))].sort(), [entries]);
-  const uniqueVessels = useMemo(() => [...new Set(Object.values(containerMeta).map(m => m?.vessel_name).filter(Boolean))].sort(), [containerMeta]);
+  const uniqueVessels = useMemo(() => {
+    const a = Object.values(containerMeta).map(m => m?.vessel_name).filter(Boolean);
+    const b = vesselMovements.map(v => v.vessel_name).filter(Boolean);
+    return [...new Set([...a, ...b])].sort();
+  }, [containerMeta, vesselMovements]);
 
   const filteredKeys = useMemo(() => {
     return Object.keys(grouped).filter(key => {
@@ -642,14 +879,11 @@ export default function CargoApp({ session }) {
         const q = search.toUpperCase();
         const matches = key.includes(q) || grouped[key].some(e =>
           (e.vehicle_number || "").toUpperCase().includes(q) ||
-          e.shipper.toUpperCase().includes(q) ||
-          e.consignee.toUpperCase().includes(q)
+          e.shipper.toUpperCase().includes(q) || e.consignee.toUpperCase().includes(q)
         );
         if (!matches) return false;
       }
-      if (statusFilter !== "all") {
-        if ((containerMeta[key]?.status || "stuffing") !== statusFilter) return false;
-      }
+      if (statusFilter !== "all" && (containerMeta[key]?.status || "stuffing") !== statusFilter) return false;
       if (dateFromFilter || dateToFilter) {
         const hasMatch = grouped[key].some(e => {
           const d = e.booking_date || new Date(e.created_at).toISOString().slice(0, 10);
@@ -663,30 +897,20 @@ export default function CargoApp({ session }) {
     }).sort();
   }, [grouped, containerMeta, search, statusFilter, dateFromFilter, dateToFilter]);
 
-  const lclBannerEntry = form.container_no ? entries.find(e =>
-    e.container_no === form.container_no.trim().toUpperCase() && e.id !== editId
-  ) : null;
+  const lclBannerEntry = form.container_no ? entries.find(e => e.container_no === form.container_no.trim().toUpperCase() && e.id !== editId) : null;
 
   const exportAllExcel = () => {
     if (entries.length === 0) { showToast("No data to export.", "error"); return; }
     const rows = entries.map(e => {
       const m = containerMeta[e.container_no] || {};
       return {
-        "Container No.": e.container_no,
-        "Status": getStatusInfo(m.status || "stuffing").label,
-        "Shipper": e.shipper,
-        "Consignee": e.consignee,
-        "GST No.": e.gst_number || "",
-        "E-Way Bill": e.eway_bill || "",
-        "Quantity": e.quantity || "",
-        "Goods Description": e.goods_description,
-        "Vehicle No.": e.vehicle_number || "",
-        "Vessel": m.vessel_name || "",
-        "Voyage": m.voyage_number || "",
-        "Booking Date": e.booking_date || "",
-        "Remarks": e.remarks || "",
-        "Logged By": e.created_by_email || "",
-        "Logged At": new Date(e.created_at).toLocaleString("en-IN"),
+        "Container No.": e.container_no, "Status": getStatusInfo(m.status || "stuffing").label,
+        "Shipper": e.shipper, "Consignee": e.consignee, "GST No.": e.gst_number || "",
+        "E-Way Bill": e.eway_bill || "", "Quantity": e.quantity || "",
+        "Goods Description": e.goods_description, "Vehicle No.": e.vehicle_number || "",
+        "Vessel": m.vessel_name || "", "Voyage": m.voyage_number || "",
+        "Booking Date": e.booking_date || "", "Remarks": e.remarks || "",
+        "Logged By": e.created_by_email || "", "Logged At": new Date(e.created_at).toLocaleString("en-IN"),
       };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -701,15 +925,10 @@ export default function CargoApp({ session }) {
     const cargos = grouped[containerNo] || [];
     if (cargos.length === 0) return;
     const rows = cargos.map((e, i) => ({
-      "#": i + 1,
-      "Shipper": e.shipper,
-      "Consignee": e.consignee,
-      "GST No.": e.gst_number || "",
-      "E-Way Bill": e.eway_bill || "",
-      "Quantity": e.quantity || "",
-      "Goods Description": e.goods_description,
-      "Booking Date": formatDate(e.booking_date),
-      "Remarks": e.remarks || "",
+      "#": i + 1, "Shipper": e.shipper, "Consignee": e.consignee,
+      "GST No.": e.gst_number || "", "E-Way Bill": e.eway_bill || "",
+      "Quantity": e.quantity || "", "Goods Description": e.goods_description,
+      "Booking Date": formatDate(e.booking_date), "Remarks": e.remarks || "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     ws["!cols"] = Object.keys(rows[0] || {}).map(() => ({ wch: 18 }));
@@ -721,7 +940,7 @@ export default function CargoApp({ session }) {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: OFFWHITE, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif" }}>
+      <div style={{ minHeight: "100vh", background: OFFWHITE, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center" }}>
           <img src="/kraft-logo.png" alt="Kraft" style={{ width: "56px", height: "56px", marginBottom: "12px", objectFit: "contain" }} />
           <div style={{ color: MUTED }}>Loading Kraft Manifest...</div>
@@ -750,7 +969,7 @@ export default function CargoApp({ session }) {
         position: "sticky", top: 0, zIndex: 100,
         boxShadow: "0 2px 12px rgba(13,30,60,0.3)",
       }}>
-       <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
           <img src="/kraft-logo.png" alt="Kraft" style={{ width: "40px", height: "40px", objectFit: "contain", flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: "15px", fontWeight: 700, color: OFFWHITE }}>Cargo Manifest</div>
@@ -758,30 +977,33 @@ export default function CargoApp({ session }) {
           </div>
         </div>
         <div style={{ position: "relative", flexShrink: 0 }}>
-          <button onClick={() => setShowMenu(!showMenu)} style={{
-            padding: "8px 12px", borderRadius: "8px", fontSize: "18px", cursor: "pointer",
-            background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)",
-            color: OFFWHITE, fontWeight: 700,
-          }}>⋮</button>
+          <button onClick={() => setShowMenu(!showMenu)} style={{ padding: "8px 12px", borderRadius: "8px", fontSize: "18px", cursor: "pointer", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: OFFWHITE, fontWeight: 700 }}>⋮</button>
           {showMenu && (
-            <div style={{ position: "absolute", right: 0, top: "100%", marginTop: "8px", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", boxShadow: "0 4px 20px rgba(13,30,60,0.2)", zIndex: 200, minWidth: "220px", overflow: "hidden" }}>
+            <div style={{ position: "absolute", right: 0, top: "100%", marginTop: "8px", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", boxShadow: "0 4px 20px rgba(13,30,60,0.2)", zIndex: 200, minWidth: "240px", overflow: "hidden" }}>
               <button onClick={() => { exportAllExcel(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left" }}>📊 Export All to Excel</button>
+              {!pushEnabled && (
+                <button onClick={() => { enablePush(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🔔 Enable Push Notifications</button>
+              )}
+              {pushEnabled && (
+                <div style={{ padding: "12px 14px", fontSize: "12px", color: "#15803d", borderTop: `1px solid ${BORDER}`, fontWeight: 600 }}>🔔 Notifications: ON</div>
+              )}
               <button onClick={() => { handleLogout(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: "#c0392b", fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🚪 Log Out</button>
             </div>
           )}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "4px", padding: "10px 16px 0", background: OFFWHITE, position: "sticky", top: "64px", zIndex: 90, borderBottom: `1px solid ${BORDER}` }}>
-        {[["entry", "📋 Entry"], ["log", `📦 Log (${Object.keys(grouped).length})`], ["dashboard", "📊 Stats"]].map(([tab, label]) => (
+      <div style={{ display: "flex", gap: "2px", padding: "10px 8px 0", background: OFFWHITE, position: "sticky", top: "64px", zIndex: 90, borderBottom: `1px solid ${BORDER}`, overflowX: "auto" }}>
+        {[["entry", "📋"], ["log", `📦 ${Object.keys(grouped).length}`], ["vessel", "🚢"], ["activity", "📜"], ["dashboard", "📊"]].map(([tab, label]) => (
           <button key={tab} onClick={() => { setActiveTab(tab); if (tab === "entry" && !editId) { setForm(initialForm); setErrors({}); } }}
             style={{
-              flex: 1, padding: "10px 8px", borderRadius: "8px 8px 0 0", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+              flex: 1, minWidth: "60px", padding: "10px 6px", borderRadius: "8px 8px 0 0", fontSize: "12px", fontWeight: 600, cursor: "pointer",
               background: activeTab === tab ? "#fff" : "transparent",
               border: `1px solid ${activeTab === tab ? BORDER : "transparent"}`,
               borderBottom: activeTab === tab ? "1px solid #fff" : "none",
               marginBottom: "-1px",
               color: activeTab === tab ? NAVY : MUTED,
+              whiteSpace: "nowrap",
             }}>{label}</button>
         ))}
       </div>
@@ -791,27 +1013,19 @@ export default function CargoApp({ session }) {
         {activeTab === "entry" && (
           <div>
             <div style={{ marginBottom: "20px" }}>
-              <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>
-                {editId ? "✏️ Edit Cargo Entry" : "📋 New Cargo Entry"}
-              </h2>
-              <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>
-                {editId ? "Update the details below and save." : "Same container number will be grouped automatically as LCL cargo."}
-              </p>
+              <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>{editId ? "✏️ Edit Cargo Entry" : "📋 New Cargo Entry"}</h2>
+              <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>{editId ? "Update the details below and save." : "Same container number will be grouped automatically as LCL cargo."}</p>
             </div>
-
-            <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "14px", padding: "20px", boxShadow: "0 2px 12px rgba(13,30,60,0.07)" }}>
+            <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "14px", padding: "20px" }}>
               {lclBannerEntry && (
                 <div style={{ background: "#e6f7ed", border: "1px solid #9eddb8", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={{ fontSize: "18px" }}>📦</span>
                   <div>
                     <div style={{ fontSize: "12px", fontWeight: 700, color: "#1a5c32" }}>LCL Container Detected</div>
-                    <div style={{ fontSize: "11px", color: "#2a7a4a" }}>
-                      Container <strong style={{ fontFamily: "'DM Mono', monospace" }}>{form.container_no.toUpperCase()}</strong> already has cargo. New entry will be grouped under it.
-                    </div>
+                    <div style={{ fontSize: "11px", color: "#2a7a4a" }}>Container <strong style={{ fontFamily: "'DM Mono', monospace" }}>{form.container_no.toUpperCase()}</strong> already has cargo. New entry will be grouped under it.</div>
                   </div>
                 </div>
               )}
-
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                 <Field label="Shipper" field="shipper" placeholder="Shipper name" required half value={form.shipper} error={errors.shipper} onChange={handleFieldChange} listId="shippers-list" list={uniqueShippers} />
                 <Field label="Consignee" field="consignee" placeholder="Consignee name" required half value={form.consignee} error={errors.consignee} onChange={handleFieldChange} listId="consignees-list" list={uniqueConsignees} />
@@ -820,16 +1034,9 @@ export default function CargoApp({ session }) {
                 <Field label="Quantity" field="quantity" placeholder="e.g. 10 Boxes / 500 Kgs" half value={form.quantity} error={errors.quantity} onChange={handleFieldChange} />
                 <Field label="Booking Date" field="booking_date" type="date" half value={form.booking_date} error={errors.booking_date} onChange={handleFieldChange} />
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
-                    Goods Description <span style={{ color: "#c0392b" }}>*</span>
-                  </label>
-                  <textarea
-                    value={form.goods_description || ""}
-                    onChange={e => handleFieldChange("goods_description", e.target.value)}
-                    placeholder="Describe the goods..."
-                    rows={2}
-                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: errors.goods_description ? "#fef8f8" : "#fff", border: `1px solid ${errors.goods_description ? "#e74c3c" : BORDER}`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }}
-                  />
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Goods Description <span style={{ color: "#c0392b" }}>*</span></label>
+                  <textarea value={form.goods_description || ""} onChange={e => handleFieldChange("goods_description", e.target.value)} placeholder="Describe the goods..." rows={2}
+                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: errors.goods_description ? "#fef8f8" : "#fff", border: `1px solid ${errors.goods_description ? "#e74c3c" : BORDER}`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
                   {errors.goods_description && <div style={{ fontSize: "11px", color: "#c0392b", marginTop: "4px" }}>{errors.goods_description}</div>}
                 </div>
                 <Field label="Container No." field="container_no" placeholder="e.g. MSCU1234567" required half value={form.container_no} error={errors.container_no} onChange={handleFieldChange} />
@@ -837,31 +1044,14 @@ export default function CargoApp({ session }) {
                 <Field label="Vessel Name" field="vessel_name" placeholder="e.g. MV APJ Karan 2" half value={form.vessel_name} error={errors.vessel_name} onChange={handleFieldChange} listId="vessels-list" list={uniqueVessels} />
                 <Field label="Voyage Number" field="voyage_number" placeholder="e.g. 024" half value={form.voyage_number} error={errors.voyage_number} onChange={handleFieldChange} />
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
-                    📝 Remarks (Optional)
-                  </label>
-                  <textarea
-                    value={form.remarks || ""}
-                    onChange={e => handleFieldChange("remarks", e.target.value)}
-                    placeholder="e.g. Fragile, hold for inspection, advance paid..."
-                    rows={2}
-                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "#fff", border: `1px solid ${BORDER}`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }}
-                  />
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>📝 Remarks (Optional)</label>
+                  <textarea value={form.remarks || ""} onChange={e => handleFieldChange("remarks", e.target.value)} placeholder="e.g. Fragile, hold for inspection, advance paid..." rows={2}
+                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "#fff", border: `1px solid ${BORDER}`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
                 </div>
               </div>
-
               <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
-                <button onClick={handleSubmit} style={{
-                  flex: 1, padding: "12px", borderRadius: "10px", fontSize: "14px", fontWeight: 700,
-                  background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`,
-                  border: "none", color: OFFWHITE, cursor: "pointer", letterSpacing: "0.03em",
-                }}>{editId ? "✅ Update Entry" : "💾 Save Cargo Entry"}</button>
-                {editId && (
-                  <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); }} style={{
-                    padding: "12px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600,
-                    background: "#fff", border: `1px solid ${BORDER}`, color: MUTED, cursor: "pointer",
-                  }}>Cancel</button>
-                )}
+                <button onClick={handleSubmit} style={{ flex: 1, padding: "12px", borderRadius: "10px", fontSize: "14px", fontWeight: 700, background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`, border: "none", color: OFFWHITE, cursor: "pointer", letterSpacing: "0.03em" }}>{editId ? "✅ Update Entry" : "💾 Save Cargo Entry"}</button>
+                {editId && <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); }} style={{ padding: "12px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, background: "#fff", border: `1px solid ${BORDER}`, color: MUTED, cursor: "pointer" }}>Cancel</button>}
               </div>
             </div>
           </div>
@@ -872,96 +1062,61 @@ export default function CargoApp({ session }) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
               <div>
                 <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>Manifest Log</h2>
-                <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>
-                  {filteredKeys.length} of {Object.keys(grouped).length} containers shown
-                </p>
+                <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>{filteredKeys.length} of {Object.keys(grouped).length} containers shown</p>
               </div>
-              <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); setActiveTab("entry"); }} style={{
-                padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`, border: "none", color: OFFWHITE, cursor: "pointer",
-              }}>+ New Entry</button>
+              <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); setActiveTab("entry"); }} style={{ padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`, border: "none", color: OFFWHITE, cursor: "pointer" }}>+ New Entry</button>
             </div>
-
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: MUTED, fontSize: "14px" }}>🔍</span>
-                <input
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Search container, vehicle, shipper..."
-                  style={{ width: "100%", padding: "11px 14px 11px 38px", borderRadius: "10px", background: "#fff", border: `1px solid ${BORDER}`, color: TEXT, fontSize: "14px", outline: "none" }}
-                />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search container, vehicle, shipper..." style={{ width: "100%", padding: "11px 14px 11px 38px", borderRadius: "10px", background: "#fff", border: `1px solid ${BORDER}`, color: TEXT, fontSize: "14px", outline: "none" }} />
               </div>
-              <button onClick={() => setShowFilters(!showFilters)} style={{
-                padding: "11px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600,
-                background: showFilters ? NAVY : "#fff",
-                border: `1px solid ${showFilters ? NAVY : BORDER}`,
-                color: showFilters ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap",
-              }}>🔧 {(statusFilter !== "all" || dateFromFilter || dateToFilter) ? "•" : ""} Filters</button>
+              <button onClick={() => setShowFilters(!showFilters)} style={{ padding: "11px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, background: showFilters ? NAVY : "#fff", border: `1px solid ${showFilters ? NAVY : BORDER}`, color: showFilters ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>🔧 {(statusFilter !== "all" || dateFromFilter || dateToFilter) ? "•" : ""} Filters</button>
             </div>
-
             {showFilters && (
               <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>From Date</label>
-                    <input type="date" value={dateFromFilter} onChange={e => setDateFromFilter(e.target.value)}
-                      style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${BORDER}`, fontSize: "13px", color: TEXT, background: "#fff" }} />
+                    <input type="date" value={dateFromFilter} onChange={e => setDateFromFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${BORDER}`, fontSize: "13px", color: TEXT, background: "#fff" }} />
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>To Date</label>
-                    <input type="date" value={dateToFilter} onChange={e => setDateToFilter(e.target.value)}
-                      style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${BORDER}`, fontSize: "13px", color: TEXT, background: "#fff" }} />
+                    <input type="date" value={dateToFilter} onChange={e => setDateToFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${BORDER}`, fontSize: "13px", color: TEXT, background: "#fff" }} />
                   </div>
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Status</label>
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    <button onClick={() => setStatusFilter("all")} style={{
-                      padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600,
-                      background: statusFilter === "all" ? NAVY : "#fff",
-                      color: statusFilter === "all" ? "#fff" : NAVY,
-                      border: `1px solid ${statusFilter === "all" ? NAVY : BORDER}`, cursor: "pointer",
-                    }}>All</button>
+                    <button onClick={() => setStatusFilter("all")} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === "all" ? NAVY : "#fff", color: statusFilter === "all" ? "#fff" : NAVY, border: `1px solid ${statusFilter === "all" ? NAVY : BORDER}`, cursor: "pointer" }}>All</button>
                     {STATUSES.map(s => (
-                      <button key={s.id} onClick={() => setStatusFilter(s.id)} style={{
-                        padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600,
-                        background: statusFilter === s.id ? s.color : s.bg,
-                        color: statusFilter === s.id ? "#fff" : s.color,
-                        border: `1px solid ${statusFilter === s.id ? s.color : s.border}`, cursor: "pointer",
-                      }}>{s.icon} {s.label}</button>
+                      <button key={s.id} onClick={() => setStatusFilter(s.id)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === s.id ? s.color : s.bg, color: statusFilter === s.id ? "#fff" : s.color, border: `1px solid ${statusFilter === s.id ? s.color : s.border}`, cursor: "pointer" }}>{s.icon} {s.label}</button>
                     ))}
                   </div>
                 </div>
-                {(dateFromFilter || dateToFilter || statusFilter !== "all") && (
-                  <button onClick={() => { setDateFromFilter(""); setDateToFilter(""); setStatusFilter("all"); }} style={{
-                    marginTop: "10px", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600,
-                    background: "#fff", border: `1px solid ${BORDER}`, color: MUTED, cursor: "pointer",
-                  }}>✕ Clear filters</button>
-                )}
+                {(dateFromFilter || dateToFilter || statusFilter !== "all") && <button onClick={() => { setDateFromFilter(""); setDateToFilter(""); setStatusFilter("all"); }} style={{ marginTop: "10px", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "#fff", border: `1px solid ${BORDER}`, color: MUTED, cursor: "pointer" }}>✕ Clear filters</button>}
               </div>
             )}
-
             {filteredKeys.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
                 <div style={{ fontSize: "40px", marginBottom: "12px" }}>📭</div>
-                <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>
-                  {search || statusFilter !== "all" || dateFromFilter || dateToFilter ? "No results found" : "No cargo entries yet"}
-                </div>
-                <div style={{ fontSize: "13px", color: MUTED, marginTop: "6px" }}>
-                  {search || statusFilter !== "all" || dateFromFilter || dateToFilter ? "Try changing filters." : "Click '+ New Entry' to log your first cargo."}
-                </div>
+                <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>{search || statusFilter !== "all" || dateFromFilter || dateToFilter ? "No results found" : "No cargo entries yet"}</div>
               </div>
-            ) : (
-              filteredKeys.map(key => (
-                <ContainerCard key={key} containerNo={key} entries={grouped[key]} meta={containerMeta[key]}
-                  onEdit={handleEdit} onDelete={handleDelete}
-                  onUpdateStatus={updateContainerStatus}
-                  onPrint={setPrintContainer}
-                  onExportContainer={exportContainerExcel}
-                />
-              ))
-            )}
+            ) : filteredKeys.map(key => (
+              <ContainerCard key={key} containerNo={key} entries={grouped[key]} meta={containerMeta[key]} onEdit={handleEdit} onDelete={handleDelete} onUpdateStatus={updateContainerStatus} onPrint={setPrintContainer} onExportContainer={exportContainerExcel} />
+            ))}
+          </div>
+        )}
+
+        {activeTab === "vessel" && <VesselTab vesselMovements={vesselMovements} uniqueVessels={uniqueVessels} userEmail={userEmail} onAdd={addVesselMovement} onDelete={deleteVesselMovement} />}
+
+        {activeTab === "activity" && (
+          <div>
+            <div style={{ marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>📜 Activity Log</h2>
+              <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>Live timeline of all team actions</p>
+            </div>
+            <ActivityTab activities={activities} />
           </div>
         )}
 
@@ -976,23 +1131,31 @@ export default function CargoApp({ session }) {
         )}
       </div>
 
+      {pushPrompt && (
+        <div style={{ position: "fixed", bottom: "16px", left: "16px", right: "16px", maxWidth: "440px", margin: "0 auto", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", boxShadow: "0 4px 20px rgba(13,30,60,0.15)", zIndex: 500, animation: "fadeUp 0.3s ease" }}>
+          <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+            <div style={{ fontSize: "24px" }}>🔔</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>Get notified instantly</div>
+              <div style={{ fontSize: "12px", color: MUTED, marginBottom: "10px" }}>Be alerted when teammates add new cargo, even when the app is closed.</div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button onClick={enablePush} style={{ padding: "7px 14px", borderRadius: "6px", background: NAVY, color: "#fff", border: "none", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>Enable</button>
+                <button onClick={dismissPushPrompt} style={{ padding: "7px 14px", borderRadius: "6px", background: "#fff", color: MUTED, border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>Not now</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
-        <div style={{
-          position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)",
-          background: toast.type === "error" ? "#fdecea" : "#e6f7ed",
-          border: `1px solid ${toast.type === "error" ? "#f5b8b0" : "#9eddb8"}`,
-          color: toast.type === "error" ? "#c0392b" : "#1a5c32",
-          padding: "12px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600,
-          boxShadow: "0 4px 16px rgba(13,30,60,0.15)", zIndex: 1000,
-          animation: "fadeUp 0.2s ease",
-        }}>
+        <div style={{ position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", background: toast.type === "error" ? "#fdecea" : "#e6f7ed", border: `1px solid ${toast.type === "error" ? "#f5b8b0" : "#9eddb8"}`, color: toast.type === "error" ? "#c0392b" : "#1a5c32", padding: "12px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, boxShadow: "0 4px 16px rgba(13,30,60,0.15)", zIndex: 1000, animation: "fadeUp 0.2s ease" }}>
           {toast.type === "error" ? "🗑️" : "✅"} {toast.msg}
         </div>
       )}
 
       {deleteConfirm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(13,30,60,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "20px" }}>
-          <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "14px", padding: "28px", maxWidth: "360px", width: "100%", textAlign: "center", boxShadow: "0 8px 32px rgba(13,30,60,0.2)" }}>
+          <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "14px", padding: "28px", maxWidth: "360px", width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: "32px", marginBottom: "12px" }}>⚠️</div>
             <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Delete Entry?</div>
             <div style={{ fontSize: "13px", color: MUTED, marginBottom: "24px" }}>This cannot be undone.</div>
