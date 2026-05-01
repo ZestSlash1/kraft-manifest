@@ -1,0 +1,141 @@
+import { useState } from "react";
+import { supabase } from "./supabaseClient";
+
+const NAVY = "#0d1e3c";
+const NAVY2 = "#1a3a6a";
+const OFFWHITE = "#f0edf0";
+const BORDER = "#d0cad8";
+const MUTED = "#5a6a7a";
+
+export default function Auth() {
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      if (mode === "login") {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setMessage({
+          type: "success",
+          text: "Account created! Please check your email to confirm, then log in.",
+        });
+        setMode("login");
+      }
+    } catch (err) {
+      setMessage({ type: "error", text: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "20px", fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+        * { box-sizing: border-box; }
+      `}</style>
+
+      <div style={{
+        background: OFFWHITE, borderRadius: "16px", padding: "32px",
+        maxWidth: "400px", width: "100%",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+      }}>
+        <div style={{ textAlign: "center", marginBottom: "24px" }}>
+          <div style={{ fontSize: "32px", marginBottom: "8px" }}>⚓</div>
+          <div style={{ fontSize: "20px", fontWeight: 700, color: NAVY }}>Kraft Shipping</div>
+          <div style={{ fontSize: "12px", color: MUTED, marginTop: "4px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+            Cargo Manifest
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+          {[["login", "Login"], ["signup", "Sign Up"]].map(([m, label]) => (
+            <button key={m} onClick={() => { setMode(m); setMessage(null); }}
+              style={{
+                flex: 1, padding: "10px", borderRadius: "8px",
+                background: mode === m ? NAVY : "#fff",
+                color: mode === m ? "#fff" : NAVY,
+                border: `1px solid ${mode === m ? NAVY : BORDER}`,
+                fontWeight: 600, fontSize: "13px", cursor: "pointer",
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: "14px" }}>
+            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
+              Email
+            </label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+              placeholder="you@example.com"
+              style={{
+                width: "100%", padding: "10px 14px", borderRadius: "8px",
+                border: `1px solid ${BORDER}`, fontSize: "14px", outline: "none", background: "#fff",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
+              Password
+            </label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+              placeholder={mode === "signup" ? "Min 6 characters" : "Your password"}
+              minLength={6}
+              style={{
+                width: "100%", padding: "10px 14px", borderRadius: "8px",
+                border: `1px solid ${BORDER}`, fontSize: "14px", outline: "none", background: "#fff",
+              }}
+            />
+          </div>
+
+          {message && (
+            <div style={{
+              padding: "10px 14px", marginBottom: "14px", borderRadius: "8px",
+              background: message.type === "error" ? "#fdecea" : "#e6f7ed",
+              border: `1px solid ${message.type === "error" ? "#f5b8b0" : "#9eddb8"}`,
+              color: message.type === "error" ? "#c0392b" : "#1a5c32",
+              fontSize: "12px",
+            }}>
+              {message.text}
+            </div>
+          )}
+
+          <button type="submit" disabled={loading}
+            style={{
+              width: "100%", padding: "12px", borderRadius: "10px",
+              background: NAVY, color: "#fff", border: "none",
+              fontWeight: 700, fontSize: "14px", cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.6 : 1, letterSpacing: "0.03em",
+            }}>
+            {loading ? "Please wait..." : (mode === "login" ? "🔐 Log In" : "✨ Create Account")}
+          </button>
+        </form>
+
+        <div style={{ marginTop: "20px", fontSize: "11px", color: MUTED, textAlign: "center", lineHeight: "1.5" }}>
+          {mode === "signup"
+            ? "First time? Create an account using your work email."
+            : "Don't have an account? Tap Sign Up above."}
+        </div>
+      </div>
+    </div>
+  );
+}
