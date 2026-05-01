@@ -57,7 +57,7 @@ export default function Auth() {
         boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
       }}>
         <div style={{ textAlign: "center", marginBottom: "24px" }}>
-          <div style={{ fontSize: "32px", marginBottom: "8px" }}>⚓</div>
+          <img src="/kraft-logo.png" alt="Kraft" style={{ width: "72px", height: "72px", marginBottom: "8px", objectFit: "contain" }} />
           <div style={{ fontSize: "20px", fontWeight: 700, color: NAVY }}>Kraft Shipping</div>
           <div style={{ fontSize: "12px", color: MUTED, marginTop: "4px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
             Cargo Manifest

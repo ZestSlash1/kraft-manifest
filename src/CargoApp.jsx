@@ -385,7 +385,7 @@ function PrintView({ containerNo, entries, meta, onClose }) {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "16px", borderBottom: `2px solid ${NAVY}`, paddingBottom: "16px", marginBottom: "20px" }}>
-        <div style={{ fontSize: "40px" }}>⚓</div>
+        <img src="/kraft-logo.png" alt="Kraft" style={{ width: "70px", height: "70px", objectFit: "contain" }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: "20px", fontWeight: 700, color: NAVY }}>Kraft Shipping & Logistics Pvt. Ltd.</div>
           <div style={{ fontSize: "13px", color: MUTED }}>Container Manifest</div>
@@ -723,7 +723,7 @@ export default function CargoApp({ session }) {
     return (
       <div style={{ minHeight: "100vh", background: OFFWHITE, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif" }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "32px", marginBottom: "12px" }}>⚓</div>
+          <img src="/kraft-logo.png" alt="Kraft" style={{ width: "56px", height: "56px", marginBottom: "12px", objectFit: "contain" }} />
           <div style={{ color: MUTED }}>Loading Kraft Manifest...</div>
         </div>
       </div>
@@ -750,8 +750,8 @@ export default function CargoApp({ session }) {
         position: "sticky", top: 0, zIndex: 100,
         boxShadow: "0 2px 12px rgba(13,30,60,0.3)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: "28px" }}>⚓</div>
+       <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
+          <img src="/kraft-logo.png" alt="Kraft" style={{ width: "40px", height: "40px", objectFit: "contain", flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: "15px", fontWeight: 700, color: OFFWHITE }}>Cargo Manifest</div>
             <div style={{ fontSize: "10px", color: "rgba(240,237,240,0.55)", letterSpacing: "0.1em", textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userEmail}</div>
