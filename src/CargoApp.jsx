@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import * as XLSX from "xlsx";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import Globe from "react-globe.gl";
 import { supabase } from "./supabaseClient";
 import AIDocReader from "./AIDocReader";
 
@@ -210,7 +211,8 @@ const PillSelector = memo(({ label, value, onChange, options }) => (
     </div>
   </div>
 ));
-function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer, onUpdateLoadType }) {
+
+function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer, onUpdateLoadType, isAdmin }) {
   const [expanded, setExpanded] = useState(true);
   const [statusMenu, setStatusMenu] = useState(false);
   const status = meta?.status || "stuffing";
@@ -276,7 +278,9 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
                   </div>
                   <div style={{ display: "flex", gap: "6px" }}>
                     <button onClick={() => onEdit(entry)} style={{ background: "#e8eef8", border: "1px solid #b8c8e0", borderRadius: "6px", color: NAVY, padding: "4px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Edit</button>
-                    <button onClick={() => onDelete(entry.id)} style={{ background: "#fdecea", border: "1px solid #f5b8b0", borderRadius: "6px", color: "#c0392b", padding: "4px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+                    {isAdmin && (
+                      <button onClick={() => onDelete(entry.id)} style={{ background: "#fdecea", border: "1px solid #f5b8b0", borderRadius: "6px", color: "#c0392b", padding: "4px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
@@ -492,10 +496,84 @@ function ActivityTab({ activities }) {
   );
 }
 
-function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete }) {
+function VesselGlobe({ vesselMovements }) {
+  const globeEl = useRef();
+  const containerRef = useRef();
+  const [dimensions, setDimensions] = useState({ width: 0, height: 400 });
+
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        setDimensions({
+          width: containerRef.current.clientWidth,
+          height: 400
+        });
+      }
+    };
+    updateSize(); 
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, []);
+
+  const latestMovements = useMemo(() => {
+    const map = {};
+    const sorted = [...vesselMovements].sort((a, b) => new Date(b.event_date) - new Date(a.event_date));
+    
+    sorted.forEach(m => {
+      if (m.latitude && m.longitude && !map[m.vessel_name]) {
+        map[m.vessel_name] = {
+          name: m.vessel_name,
+          lat: parseFloat(m.latitude),
+          lng: parseFloat(m.longitude),
+          color: "#f59e3c" 
+        };
+      }
+    });
+    return Object.values(map);
+  }, [vesselMovements]);
+
+  useEffect(() => {
+    if (globeEl.current) {
+      globeEl.current.controls().autoRotate = true;
+      globeEl.current.controls().autoRotateSpeed = 0.5;
+      
+      if (latestMovements.length > 0) {
+        globeEl.current.pointOfView({ lat: latestMovements[0].lat, lng: latestMovements[0].lng, altitude: 1.5 });
+      } else {
+        globeEl.current.pointOfView({ lat: 22.57, lng: 88.36, altitude: 1.5 });
+      }
+    }
+  }, [latestMovements]);
+
+  return (
+    <div ref={containerRef} style={{ height: "400px", width: "100%", borderRadius: "12px", overflow: "hidden", border: "1px solid #d0cad8", marginBottom: "16px", backgroundColor: "#0d1e3c" }}>
+      {dimensions.width > 0 && (
+        <Globe
+          ref={globeEl}
+          width={dimensions.width}
+          height={dimensions.height}
+          globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
+          backgroundColor="#0d1e3c"
+          pointsData={latestMovements}
+          pointColor="color"
+          pointAltitude={0.05}
+          pointRadius={0.5}
+          labelsData={latestMovements}
+          labelLabel="name"
+          labelColor={() => "white"}
+          labelDotRadius={0.5}
+          labelAltitude={0.1}
+        />
+      )}
+    </div>
+  );
+}
+
+function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, showToast }) {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ vessel_name: "", voyage_number: "", event_type: "sailed", event_date: "", location: "", notes: "" });
+  const [form, setForm] = useState({ vessel_name: "", voyage_number: "", event_type: "sailed", event_date: "", location: "", notes: "", latitude: "", longitude: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [fetchingLocation, setFetchingLocation] = useState(false);
 
   const grouped = useMemo(() => {
     const g = {};
@@ -516,9 +594,39 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete }) {
     if (!form.vessel_name.trim() || !form.event_date) return;
     setSubmitting(true);
     await onAdd({ ...form });
-    setForm({ vessel_name: "", voyage_number: "", event_type: "sailed", event_date: "", location: "", notes: "" });
+    setForm({ vessel_name: "", voyage_number: "", event_type: "sailed", event_date: "", location: "", notes: "", latitude: "", longitude: "" });
     setShowForm(false);
     setSubmitting(false);
+  };
+
+  const fetchLiveLocation = async () => {
+    if (!form.location) {
+      showToast("Please enter a Location Name first (e.g., 'Kolkata Port').", "error");
+      return;
+    }
+
+    setFetchingLocation(true);
+    try {
+      const searchQuery = encodeURIComponent(form.location);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&limit=1`);
+      const data = await res.json();
+
+      if (data && data.length > 0) {
+        const place = data[0];
+        setForm(f => ({
+          ...f,
+          latitude: parseFloat(place.lat).toFixed(4),
+          longitude: parseFloat(place.lon).toFixed(4),
+        }));
+        showToast(`Coordinates found for ${place.display_name.split(',')[0]}!`);
+      } else {
+        showToast("Location not found on the map. Try being more specific.", "error");
+      }
+    } catch (err) {
+      showToast("Failed to fetch coordinates.", "error");
+      console.error(err);
+    }
+    setFetchingLocation(false);
   };
 
   return (
@@ -535,6 +643,8 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete }) {
           color: showForm ? NAVY : OFFWHITE, cursor: "pointer",
         }}>{showForm ? "✕ Cancel" : "+ Add Movement"}</button>
       </div>
+
+      <VesselGlobe vesselMovements={vesselMovements} />
 
       {showForm && (
         <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
@@ -569,10 +679,29 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete }) {
                 style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff" }} />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Location</label>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Location Name</label>
               <input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. Kolkata Port"
                 style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff" }} />
             </div>
+            
+            <div style={{ gridColumn: "span 2", display: "flex", gap: "12px", alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Latitude</label>
+                <input type="number" step="any" value={form.latitude} onChange={e => setForm({ ...form, latitude: e.target.value })} placeholder="e.g. 22.57"
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff", fontFamily: "'DM Mono', monospace" }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Longitude</label>
+                <input type="number" step="any" value={form.longitude} onChange={e => setForm({ ...form, longitude: e.target.value })} placeholder="e.g. 88.36"
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff", fontFamily: "'DM Mono', monospace" }} />
+              </div>
+              <button onClick={fetchLiveLocation} disabled={fetchingLocation} type="button" style={{
+                height: "37px", padding: "0 16px", borderRadius: "8px", background: "#e8eef8", color: NAVY, border: "1px solid #b8c8e0", fontWeight: 600, fontSize: "12px", cursor: fetchingLocation ? "not-allowed" : "pointer", whiteSpace: "nowrap"
+              }}>
+                {fetchingLocation ? "⏳ Searching..." : "📍 Get Coordinates from Location"}
+              </button>
+            </div>
+
             <div style={{ gridColumn: "span 2" }}>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Notes</label>
               <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Optional details..." rows={2}
@@ -608,11 +737,16 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete }) {
                       <span style={{ fontSize: "13px", fontWeight: 700, color: ev.color }}>{ev.label}</span>
                       {e.location && <span style={{ fontSize: "12px", color: MUTED }}>· 📍 {e.location}</span>}
                     </div>
-                    <div style={{ fontSize: "11px", color: MUTED, marginTop: "2px" }}>{formatDateTime(e.event_date)}</div>
+                    <div style={{ fontSize: "11px", color: MUTED, marginTop: "2px" }}>
+                      {formatDateTime(e.event_date)} 
+                      {e.latitude && e.longitude && <span style={{ fontFamily: "'DM Mono', monospace", marginLeft: "6px" }}>(Lat: {e.latitude}, Lng: {e.longitude})</span>}
+                    </div>
                     {e.notes && <div style={{ fontSize: "12px", color: TEXT, marginTop: "4px", padding: "6px 8px", background: OFFWHITE, borderRadius: "4px" }}>{e.notes}</div>}
-                    {e.created_by_email && <div style={{ fontSize: "10px", color: MUTED, marginTop: "4px" }}>Logged by {e.created_by_email.split("@")[0]} · {timeAgo(e.created_at)}</div>}
+                    {e.created_by_email && <div style={{ fontSize: "10px", color: MUTED, marginTop: "4px" }}>Logged by {e.created_by_email.split("@")[0]} • {timeAgo(e.created_at)}</div>}
                   </div>
-                  <button onClick={() => onDelete(e.id)} style={{ background: "transparent", border: "none", color: "#c0392b", cursor: "pointer", fontSize: "12px", padding: "4px" }}>✕</button>
+                  {isAdmin && (
+                    <button onClick={() => onDelete(e.id)} style={{ background: "transparent", border: "none", color: "#c0392b", cursor: "pointer", fontSize: "12px", padding: "4px" }}>🗑️</button>
+                  )}
                 </div>
               );
             })}
@@ -684,6 +818,7 @@ function PrintView({ containerNo, entries, meta, onClose }) {
     </div>
   );
 }
+
 export default function CargoApp({ session }) {
   const [entries, setEntries] = useState([]);
   const [containerMeta, setContainerMeta] = useState({});
@@ -705,9 +840,14 @@ export default function CargoApp({ session }) {
   const [showMenu, setShowMenu] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushPrompt, setPushPrompt] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const userEmail = session?.user?.email || "";
   const userId = session?.user?.id;
+  
+  const fullName = userEmail 
+    ? userEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ') 
+    : "User";
 
   useEffect(() => {
     let mounted = true;
@@ -716,7 +856,16 @@ export default function CargoApp({ session }) {
       const { data: metaData } = await supabase.from("container_meta").select("*");
       const { data: activityData } = await supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(200);
       const { data: vesselData } = await supabase.from("vessel_movements").select("*").order("event_date", { ascending: false });
+      
+      if (userId) {
+        const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", userId).single();
+        if (roleData && roleData.role === "admin") {
+          setIsAdmin(true);
+        }
+      }
+
       if (!mounted) return;
+
       setEntries(cargoData || []);
       const metaMap = {};
       (metaData || []).forEach(m => { metaMap[m.container_no] = m; });
@@ -761,7 +910,7 @@ export default function CargoApp({ session }) {
       supabase.removeChannel(activitySub);
       supabase.removeChannel(vesselSub);
     };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
@@ -916,6 +1065,8 @@ export default function CargoApp({ session }) {
       event_type: data.event_type,
       event_date: new Date(data.event_date).toISOString(),
       location: data.location?.trim() || null,
+      latitude: data.latitude ? parseFloat(data.latitude) : null,
+      longitude: data.longitude ? parseFloat(data.longitude) : null,
       notes: data.notes?.trim() || null,
       created_by_email: userEmail,
     };
@@ -971,27 +1122,58 @@ export default function CargoApp({ session }) {
 
   const exportAllExcel = () => {
     if (entries.length === 0) { showToast("No data to export.", "error"); return; }
-    const rows = entries.map(e => {
+    const freightLabel = {
+      to_pay: "TO PAY",
+      prepaid: "PREPAID",
+      paid: "FRT PAID",
+    };
+    const paymentLabel = {
+      pending: "PENDING",
+      partial: "PARTIAL",
+      paid: "PAID",
+    };
+    const rows = entries.map((e, idx) => {
       const m = containerMeta[e.container_no] || {};
       return {
-        "Container No.": e.container_no, "Container Size": e.container_size || "",
-        "Load Type": e.load_type || "—", "Status": getStatusInfo(m.status || "stuffing").label,
-        "Shipper": e.shipper, "Consignee": e.consignee,
-        "GST No.": e.gst_number || "", "E-Way Bill": e.eway_bill || "", "E-Way Valid Till": e.eway_valid_till || "",
-        "Quantity": e.quantity || "", "Cargo Weight": e.cargo_weight || "", "Seal No.": e.seal_no || "",
-        "Goods Description": e.goods_description,
-        "Freight Status": e.freight_status || "", "Payment Status": e.payment_status || "",
-        "Vehicle No.": e.vehicle_number || "", "Vessel": m.vessel_name || "", "Voyage": m.voyage_number || "",
-        "Booking Date": e.booking_date || "", "Remarks": e.remarks || "",
-        "Logged By": e.created_by_email || "", "Logged At": new Date(e.created_at).toLocaleString("en-IN"),
+        "SL NO": idx + 1,
+        "SHIPPER": e.shipper || "",
+        "CONSIGNEE": e.consignee || "",
+        "CONT. NO": e.container_no || "",
+        "SIZE": e.container_size || "",
+        "WEIGHT": e.cargo_weight || "",
+        "SEAL NUMBER": e.seal_no || "",
+        "KOL TRUCK": e.vehicle_number || "",
+        "COMMODITY": e.goods_description || "",
+        "PKGS": e.quantity || "",
+        "E-WAY BILL DT": e.eway_bill || "",
+        "VALID TILL": e.eway_valid_till || "",
+        "FREIGHT TO PAY/PAID": freightLabel[e.freight_status] || "",
+        "PAYMENT STATUS": paymentLabel[e.payment_status] || "",
+        "DELIVERY STATUS": getStatusInfo(m.status || "stuffing").label.toUpperCase(),
       };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = Object.keys(rows[0] || {}).map(() => ({ wch: 18 }));
+    ws["!cols"] = [
+      { wch: 6 },   // SL NO
+      { wch: 22 },  // SHIPPER
+      { wch: 22 },  // CONSIGNEE
+      { wch: 14 },  // CONT. NO
+      { wch: 8 },   // SIZE
+      { wch: 12 },  // WEIGHT
+      { wch: 14 },  // SEAL NUMBER
+      { wch: 14 },  // KOL TRUCK
+      { wch: 22 },  // COMMODITY
+      { wch: 16 },  // PKGS
+      { wch: 18 },  // E-WAY BILL DT
+      { wch: 12 },  // VALID TILL
+      { wch: 18 },  // FREIGHT TO PAY/PAID
+      { wch: 16 },  // PAYMENT STATUS
+      { wch: 16 },  // DELIVERY STATUS
+    ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Manifest");
     XLSX.writeFile(wb, `Kraft_Manifest_${todayStr()}.xlsx`);
-    showToast("Excel exported.");
+    showToast("Excel exported in master sheet format.");
   };
 
   const exportContainerExcel = (containerNo) => {
@@ -1046,7 +1228,37 @@ export default function CargoApp({ session }) {
           <img src="/kraft-logo.png" alt="Kraft" style={{ width: "40px", height: "40px", objectFit: "contain", flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: "15px", fontWeight: 700, color: OFFWHITE }}>Cargo Manifest</div>
-            <div style={{ fontSize: "10px", color: "rgba(240,237,240,0.55)", letterSpacing: "0.1em", textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userEmail}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
+              <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.9)", fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {fullName}
+              </div>
+              {isAdmin ? (
+                <span style={{
+                  background: "linear-gradient(135deg, #f59e3c 0%, #d87c1e 100%)",
+                  color: "#fff",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontSize: "9px",
+                  fontWeight: 800,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  boxShadow: "0 2px 8px rgba(245, 158, 60, 0.4)",
+                  border: "1px solid rgba(255,255,255,0.2)"
+                }}>Admin</span>
+              ) : (
+                <span style={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "rgba(255,255,255,0.7)",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontSize: "9px",
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  border: "1px solid rgba(255,255,255,0.15)"
+                }}>Staff</span>
+              )}
+            </div>
           </div>
         </div>
         <div style={{ position: "relative", flexShrink: 0 }}>
@@ -1235,7 +1447,7 @@ export default function CargoApp({ session }) {
               </div>
             ) : filteredKeys.map(key => (
               <ContainerCard key={key} containerNo={key} entries={grouped[key]} meta={containerMeta[key]}
-                userEmail={userEmail}
+                userEmail={userEmail} isAdmin={isAdmin}
                 onEdit={handleEdit} onDelete={handleDelete} onUpdateStatus={updateContainerStatus}
                 onPrint={setPrintContainer} onExportContainer={exportContainerExcel}
                 onUpdateLoadType={updateContainerLoadType} />
@@ -1243,7 +1455,7 @@ export default function CargoApp({ session }) {
           </div>
         )}
 
-        {activeTab === "vessel" && <VesselTab vesselMovements={vesselMovements} uniqueVessels={uniqueVessels} onAdd={addVesselMovement} onDelete={deleteVesselMovement} />}
+        {activeTab === "vessel" && <VesselTab vesselMovements={vesselMovements} uniqueVessels={uniqueVessels} onAdd={addVesselMovement} onDelete={deleteVesselMovement} isAdmin={isAdmin} showToast={showToast} />}
 
         {activeTab === "activity" && (
           <div>
