@@ -219,7 +219,15 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
   const vehicle = entries[0]?.vehicle_number || "—";
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 2px 12px rgba(13,30,60,0.08)" }}>
+    <div style={{ 
+      background: "#fff", 
+      border: `1px solid ${BORDER}`, 
+      borderLeft: `5px solid ${getStatusInfo(status).color}`, 
+      borderRadius: "12px", 
+      overflow: "hidden", 
+      marginBottom: "16px", 
+      boxShadow: "0 6px 16px rgba(13,30,60,0.05)"
+    }}>
       <div onClick={() => setExpanded(!expanded)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`, cursor: "pointer", userSelect: "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
           <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>🚢</div>
@@ -540,7 +548,7 @@ function VesselGlobe({ vesselMovements }) {
       if (latestMovements.length > 0) {
         globeEl.current.pointOfView({ lat: latestMovements[0].lat, lng: latestMovements[0].lng, altitude: 1.5 });
       } else {
-        globeEl.current.pointOfView({ lat: 22.57, lng: 88.36, altitude: 1.5 });
+        globeEl.current.pointOfView({ lat: 22.57, lng: 88.36, altitude: 1.5 }); 
       }
     }
   }, [latestMovements]);
@@ -1122,74 +1130,68 @@ export default function CargoApp({ session }) {
 
   const exportAllExcel = () => {
     if (entries.length === 0) { showToast("No data to export.", "error"); return; }
-    const freightLabel = {
-      to_pay: "TO PAY",
-      prepaid: "PREPAID",
-      paid: "FRT PAID",
-    };
-    const paymentLabel = {
-      pending: "PENDING",
-      partial: "PARTIAL",
-      paid: "PAID",
-    };
-    const rows = entries.map((e, idx) => {
+    const rows = entries.map((e, index) => {
       const m = containerMeta[e.container_no] || {};
       return {
-        "SL NO": idx + 1,
-        "SHIPPER": e.shipper || "",
-        "CONSIGNEE": e.consignee || "",
-        "CONT. NO": e.container_no || "",
+        "SL NO": index + 1,
+        "SHIPPER": e.shipper,
+        "CONSIGNEE": e.consignee,
+        "CONT. NO": e.container_no,
         "SIZE": e.container_size || "",
-        "WEIGHT": e.cargo_weight || "",
-        "SEAL NUMBER": e.seal_no || "",
+        "WT": e.cargo_weight || "",
+        "SEAL NO": e.seal_no || "",
         "KOL TRUCK": e.vehicle_number || "",
         "COMMODITY": e.goods_description || "",
         "PKGS": e.quantity || "",
-        "E-WAY BILL DT": e.eway_bill || "",
-        "VALID TILL": e.eway_valid_till || "",
-        "FREIGHT TO PAY/PAID": freightLabel[e.freight_status] || "",
-        "PAYMENT STATUS": paymentLabel[e.payment_status] || "",
-        "DELIVERY STATUS": getStatusInfo(m.status || "stuffing").label.toUpperCase(),
+        "E WAY BILL DT": e.eway_bill || "",
+        "VALID TILL": e.eway_valid_till ? formatDate(e.eway_valid_till) : "",
+        "FRT P/ FRT TO PAY": e.freight_status ? getFreightInfo(e.freight_status)?.label || e.freight_status : "",
+        "PYMENT ST": e.payment_status ? getPaymentInfo(e.payment_status)?.label || e.payment_status : "",
+        "DELIVERY STATUS": getStatusInfo(m.status || "stuffing").label,
+        "GST No.": e.gst_number || "",
+        "Load Type": e.load_type || "—",
+        "Vessel": m.vessel_name || "",
+        "Voyage": m.voyage_number || "",
+        "Booking Date": e.booking_date ? formatDate(e.booking_date) : "",
+        "Remarks": e.remarks || "",
+        "Logged By": e.created_by_email || "",
       };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [
-      { wch: 6 },   // SL NO
-      { wch: 22 },  // SHIPPER
-      { wch: 22 },  // CONSIGNEE
-      { wch: 14 },  // CONT. NO
-      { wch: 8 },   // SIZE
-      { wch: 12 },  // WEIGHT
-      { wch: 14 },  // SEAL NUMBER
-      { wch: 14 },  // KOL TRUCK
-      { wch: 22 },  // COMMODITY
-      { wch: 16 },  // PKGS
-      { wch: 18 },  // E-WAY BILL DT
-      { wch: 12 },  // VALID TILL
-      { wch: 18 },  // FREIGHT TO PAY/PAID
-      { wch: 16 },  // PAYMENT STATUS
-      { wch: 16 },  // DELIVERY STATUS
-    ];
+    ws["!cols"] = Object.keys(rows[0] || {}).map(() => ({ wch: 15 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Manifest");
     XLSX.writeFile(wb, `Kraft_Manifest_${todayStr()}.xlsx`);
-    showToast("Excel exported in master sheet format.");
+    showToast("Excel exported.");
   };
 
   const exportContainerExcel = (containerNo) => {
     const cargos = grouped[containerNo] || [];
     if (cargos.length === 0) return;
-    const rows = cargos.map((e, i) => ({
-      "#": i + 1, "Shipper": e.shipper, "Consignee": e.consignee,
-      "GST No.": e.gst_number || "", "E-Way Bill": e.eway_bill || "", "Valid Till": e.eway_valid_till || "",
-      "Quantity": e.quantity || "", "Weight": e.cargo_weight || "",
-      "Seal No.": e.seal_no || "", "Size": e.container_size || "",
-      "Goods Description": e.goods_description,
-      "Freight": e.freight_status || "", "Payment": e.payment_status || "",
-      "Booking Date": formatDate(e.booking_date), "Remarks": e.remarks || "",
-    }));
+    const rows = cargos.map((e, index) => {
+      const m = containerMeta[containerNo] || {};
+      return {
+        "SL NO": index + 1,
+        "SHIPPER": e.shipper,
+        "CONSIGNEE": e.consignee,
+        "CONT. NO": e.container_no,
+        "SIZE": e.container_size || "",
+        "WT": e.cargo_weight || "",
+        "SEAL NO": e.seal_no || "",
+        "KOL TRUCK": e.vehicle_number || "",
+        "COMMODITY": e.goods_description || "",
+        "PKGS": e.quantity || "",
+        "E WAY BILL DT": e.eway_bill || "",
+        "VALID TILL": e.eway_valid_till ? formatDate(e.eway_valid_till) : "",
+        "FRT P/ FRT TO PAY": e.freight_status ? getFreightInfo(e.freight_status)?.label || e.freight_status : "",
+        "PYMENT ST": e.payment_status ? getPaymentInfo(e.payment_status)?.label || e.payment_status : "",
+        "DELIVERY STATUS": getStatusInfo(m.status || "stuffing").label,
+        "GST No.": e.gst_number || "",
+        "Remarks": e.remarks || "",
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = Object.keys(rows[0] || {}).map(() => ({ wch: 18 }));
+    ws["!cols"] = Object.keys(rows[0] || {}).map(() => ({ wch: 15 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, containerNo.slice(0, 30));
     XLSX.writeFile(wb, `${containerNo}_${todayStr()}.xlsx`);
@@ -1222,7 +1224,8 @@ export default function CargoApp({ session }) {
         background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`,
         padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
         height: "64px", position: "sticky", top: 0, zIndex: 100,
-        boxShadow: "0 2px 12px rgba(13,30,60,0.3)",
+        boxShadow: "0 6px 20px rgba(13,30,60,0.25)",
+        borderBottom: "3px solid #f59e3c", 
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
           <img src="/kraft-logo.png" alt="Kraft" style={{ width: "40px", height: "40px", objectFit: "contain", flexShrink: 0 }} />
@@ -1274,17 +1277,28 @@ export default function CargoApp({ session }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "2px", padding: "10px 8px 0", background: OFFWHITE, position: "sticky", top: "64px", zIndex: 90, borderBottom: `1px solid ${BORDER}`, overflowX: "auto" }}>
-        {[["entry", "📋"], ["log", `📦 ${Object.keys(grouped).length}`], ["vessel", "🚢"], ["activity", "📜"], ["dashboard", "📊"]].map(([tab, label]) => (
+      <div style={{ display: "flex", gap: "16px", padding: "8px 20px 0", background: "#ffffff", position: "sticky", top: "64px", zIndex: 90, borderBottom: `1px solid ${BORDER}`, overflowX: "auto", boxShadow: "0 2px 10px rgba(0,0,0,0.03)" }}>
+        {[
+          ["entry", "📋 New Entry"], 
+          ["log", `📦 Manifest (${Object.keys(grouped).length})`], 
+          ["vessel", "🚢 Vessels"], 
+          ["activity", "📜 Activity"], 
+          ["dashboard", "📊 Dashboard"]
+        ].map(([tab, label]) => (
           <button key={tab} onClick={() => { setActiveTab(tab); if (tab === "entry" && !editId) { setForm(initialForm); setErrors({}); } }}
             style={{
-              flex: 1, minWidth: "60px", padding: "10px 6px", borderRadius: "8px 8px 0 0", fontSize: "12px", fontWeight: 600, cursor: "pointer",
-              background: activeTab === tab ? "#fff" : "transparent",
-              border: `1px solid ${activeTab === tab ? BORDER : "transparent"}`,
-              borderBottom: activeTab === tab ? "1px solid #fff" : "none",
-              marginBottom: "-1px",
+              padding: "12px 4px", 
+              fontSize: "13px", 
+              fontWeight: 700, 
+              cursor: "pointer",
+              background: "transparent",
+              border: "none",
+              borderBottom: activeTab === tab ? "3px solid #f59e3c" : "3px solid transparent",
               color: activeTab === tab ? NAVY : MUTED,
               whiteSpace: "nowrap",
+              transition: "all 0.2s ease-in-out",
+              opacity: activeTab === tab ? 1 : 0.6,
+              marginBottom: "-1px"
             }}>{label}</button>
         ))}
       </div>
