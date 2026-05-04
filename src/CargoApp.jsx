@@ -29,6 +29,20 @@ const VESSEL_EVENTS = [
   { id: "other", label: "Other", icon: "📝", color: "#5a6a7a" },
 ];
 
+const CONTAINER_SIZES = ["20'", "40'", "40HC", "45HC"];
+
+const FREIGHT_STATUSES = [
+  { id: "to_pay", label: "To Pay", color: "#a85c00", bg: "#fef3e0", border: "#f5d090" },
+  { id: "prepaid", label: "Prepaid", color: "#1e40af", bg: "#e0e8f7", border: "#a8b8e0" },
+  { id: "paid", label: "Paid", color: "#15803d", bg: "#dcf5e3", border: "#9eddb8" },
+];
+
+const PAYMENT_STATUSES = [
+  { id: "pending", label: "Pending", color: "#a85c00", bg: "#fef3e0", border: "#f5d090" },
+  { id: "partial", label: "Partial", color: "#1e40af", bg: "#e0e8f7", border: "#a8b8e0" },
+  { id: "paid", label: "Paid", color: "#15803d", bg: "#dcf5e3", border: "#9eddb8" },
+];
+
 const initialForm = {
   shipper: "", consignee: "", gst_number: "", eway_bill: "",
   quantity: "", goods_description: "", container_no: "", vehicle_number: "",
@@ -66,33 +80,19 @@ function timeAgo(d) {
   return formatDate(d);
 }
 
-function getStatusInfo(id) {
-  return STATUSES.find(s => s.id === id) || STATUSES[0];
+function getStatusInfo(id) { return STATUSES.find(s => s.id === id) || STATUSES[0]; }
+function getVesselEvent(id) { return VESSEL_EVENTS.find(e => e.id === id) || VESSEL_EVENTS[VESSEL_EVENTS.length - 1]; }
+function getFreightInfo(id) { return FREIGHT_STATUSES.find(s => s.id === id); }
+function getPaymentInfo(id) { return PAYMENT_STATUSES.find(s => s.id === id); }
+
+function getContainerLoadType(entries, meta) {
+  if (meta?.load_type_override) return meta.load_type_override.toUpperCase();
+  const types = entries.map(e => e.load_type).filter(Boolean);
+  if (types.some(t => t.toUpperCase() === "LCL")) return "LCL";
+  if (entries.length === 1 && types[0]?.toUpperCase() === "FCL") return "FCL";
+  return entries.length === 1 ? "FCL" : "LCL";
 }
 
-const CONTAINER_SIZES = ["20'", "40'", "40HC", "45HC"];
-
-const FREIGHT_STATUSES = [
-  { id: "to_pay", label: "To Pay", color: "#a85c00", bg: "#fef3e0", border: "#f5d090" },
-  { id: "prepaid", label: "Prepaid", color: "#1e40af", bg: "#e0e8f7", border: "#a8b8e0" },
-  { id: "paid", label: "Paid", color: "#15803d", bg: "#dcf5e3", border: "#9eddb8" },
-];
-
-const PAYMENT_STATUSES = [
-  { id: "pending", label: "Pending", color: "#a85c00", bg: "#fef3e0", border: "#f5d090" },
-  { id: "partial", label: "Partial", color: "#1e40af", bg: "#e0e8f7", border: "#a8b8e0" },
-  { id: "paid", label: "Paid", color: "#15803d", bg: "#dcf5e3", border: "#9eddb8" },
-];
-
-function getFreightInfo(id) {
-  return FREIGHT_STATUSES.find(s => s.id === id);
-}
-
-function getPaymentInfo(id) {
-  return PAYMENT_STATUSES.find(s => s.id === id);
-}
-
-// E-way bill expiry: returns { state, daysLeft, message }
 function checkEwayExpiry(validTill) {
   if (!validTill) return null;
   try {
@@ -104,30 +104,8 @@ function checkEwayExpiry(validTill) {
     if (daysLeft === 0) return { state: "today", daysLeft, message: "Expires today!" };
     if (daysLeft <= 1) return { state: "critical", daysLeft, message: "Expires tomorrow" };
     if (daysLeft <= 3) return { state: "warning", daysLeft, message: `${daysLeft}d left` };
-    return null; // No warning needed
+    return null;
   } catch { return null; }
-}
-
-// Determine container's effective load type
-function getContainerLoadType(entries, meta) {
-  // If user manually set an override, use that
-  if (meta?.load_type_override) return meta.load_type_override.toUpperCase();
-
-  // Otherwise auto-detect from cargo entries
-  const types = entries.map(e => e.load_type).filter(Boolean);
-
-  // If any cargo is explicitly LCL, the container is LCL
-  if (types.some(t => t.toUpperCase() === "LCL")) return "LCL";
-
-  // If all cargos explicitly FCL and only 1 cargo → FCL
-  if (entries.length === 1 && types[0]?.toUpperCase() === "FCL") return "FCL";
-
-  // Default rule: 1 cargo = FCL, multiple = LCL
-  return entries.length === 1 ? "FCL" : "LCL";
-}
-
-function getVesselEvent(id) {
-  return VESSEL_EVENTS.find(e => e.id === id) || VESSEL_EVENTS[VESSEL_EVENTS.length - 1];
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -143,9 +121,7 @@ async function logActivity({ action, entityType, entityId, containerNo, details,
       action, entity_type: entityType, entity_id: entityId,
       container_no: containerNo, details, user_email: userEmail,
     });
-  } catch (err) {
-    console.error("Activity log failed:", err);
-  }
+  } catch (err) { console.error("Activity log failed:", err); }
 }
 
 async function sendPushNotification(title, body, excludeUserId) {
@@ -154,15 +130,10 @@ async function sendPushNotification(title, body, excludeUserId) {
     if (!session) return;
     await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.access_token}`,
-      },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
       body: JSON.stringify({ title, body, excludeUserId }),
     });
-  } catch (err) {
-    console.error("Push send failed:", err);
-  }
+  } catch (err) { console.error("Push send failed:", err); }
 }
 
 function Badge({ children, color = "navy" }) {
@@ -196,24 +167,58 @@ function StatusBadge({ status }) {
   );
 }
 
-function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer, onDeleteAttachment, onUpdateLoadType }) {
+const monoFields = new Set(["container_no", "vehicle_number", "gst_number", "eway_bill", "voyage_number"]);
+
+const Field = memo(({ label, field, placeholder, required, half, value, error, onChange, type = "text", listId, list }) => (
+  <div style={{ gridColumn: half ? "span 1" : "span 2" }}>
+    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
+      {label} {required && <span style={{ color: "#c0392b" }}>*</span>}
+    </label>
+    <input type={type} list={listId} value={value || ""} onChange={e => onChange(field, e.target.value)} placeholder={placeholder}
+      style={{
+        width: "100%", padding: "10px 14px", borderRadius: "8px",
+        background: error ? "#fef8f8" : "#fff",
+        border: `1px solid ${error ? "#e74c3c" : BORDER}`,
+        color: TEXT, fontSize: "14px", outline: "none", boxSizing: "border-box",
+        fontFamily: monoFields.has(field) ? "'DM Mono', monospace" : "inherit",
+        transition: "border-color 0.2s",
+      }}
+      onFocus={e => e.target.style.borderColor = NAVY}
+      onBlur={e => e.target.style.borderColor = error ? "#e74c3c" : BORDER}
+    />
+    {listId && list && <datalist id={listId}>{list.map(opt => <option key={opt} value={opt} />)}</datalist>}
+    {error && <div style={{ fontSize: "11px", color: "#c0392b", marginTop: "4px" }}>{error}</div>}
+  </div>
+));
+
+const PillSelector = memo(({ label, value, onChange, options }) => (
+  <div style={{ gridColumn: "span 1" }}>
+    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
+      {label}
+    </label>
+    <div style={{ display: "flex", gap: "4px" }}>
+      {options.map(opt => (
+        <button key={opt.value} type="button" onClick={() => onChange(opt.value === value ? "" : opt.value)}
+          style={{
+            flex: 1, padding: "9px 4px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
+            background: value === opt.value ? (opt.color || NAVY) : "#fff",
+            color: value === opt.value ? "#fff" : NAVY,
+            border: `1px solid ${value === opt.value ? (opt.color || NAVY) : BORDER}`,
+            cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+          }}>{opt.label}</button>
+      ))}
+    </div>
+  </div>
+));
+function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer, onUpdateLoadType }) {
   const [expanded, setExpanded] = useState(true);
   const [statusMenu, setStatusMenu] = useState(false);
   const status = meta?.status || "stuffing";
   const vehicle = entries[0]?.vehicle_number || "—";
 
   return (
-    <div style={{
-      background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px",
-      overflow: "hidden", marginBottom: "16px",
-      boxShadow: "0 2px 12px rgba(13,30,60,0.08)",
-    }}>
-      <div onClick={() => setExpanded(!expanded)} style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "14px 20px",
-        background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`,
-        cursor: "pointer", userSelect: "none",
-      }}>
+    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 2px 12px rgba(13,30,60,0.08)" }}>
+      <div onClick={() => setExpanded(!expanded)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`, cursor: "pointer", userSelect: "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
           <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>🚢</div>
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -246,20 +251,14 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
                 </div>
               )}
             </div>
-            <div style={{ position: "relative" }}>
-              <select value={meta?.load_type_override || "auto"}
-                onChange={(e) => { e.stopPropagation(); onUpdateLoadType(containerNo, e.target.value); }}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px",
-                  color: NAVY, padding: "5px 8px", fontSize: "11px", fontWeight: 600,
-                  fontFamily: "'DM Mono', monospace", cursor: "pointer",
-                }}>
-                <option value="auto">AUTO ({getContainerLoadType(entries, meta)})</option>
-                <option value="FCL">FCL</option>
-                <option value="LCL">LCL</option>
-              </select>
-            </div>
+            <select value={meta?.load_type_override || "auto"}
+              onChange={(e) => { e.stopPropagation(); onUpdateLoadType(containerNo, e.target.value); }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 8px", fontSize: "11px", fontWeight: 600, fontFamily: "'DM Mono', monospace", cursor: "pointer" }}>
+              <option value="auto">AUTO ({getContainerLoadType(entries, meta)})</option>
+              <option value="FCL">FCL</option>
+              <option value="LCL">LCL</option>
+            </select>
             <div style={{ flex: 1 }} />
             <button onClick={(e) => { e.stopPropagation(); onExportContainer(containerNo); }} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>📊 Excel</button>
             <button onClick={(e) => { e.stopPropagation(); onPrint(containerNo); }} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>🖨 Print</button>
@@ -269,7 +268,7 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
             {entries.map((entry, idx) => (
               <div key={entry.id} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-                 <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", color: MUTED }}>#{String(idx + 1).padStart(2, "0")}</span>
                     {entry.load_type && <Badge color={entry.load_type.toUpperCase() === "FCL" ? "navy" : "amber"}>{entry.load_type.toUpperCase()}</Badge>}
                     {entry.booking_date && <Badge color="navy">{formatDate(entry.booking_date)}</Badge>}
@@ -296,7 +295,6 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
                   ))}
                 </div>
 
-                {/* Freight + Payment status pills */}
                 {(entry.freight_status || entry.payment_status) && (
                   <div style={{ display: "flex", gap: "6px", marginTop: "10px", flexWrap: "wrap" }}>
                     {entry.freight_status && (() => {
@@ -310,7 +308,6 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
                   </div>
                 )}
 
-                {/* E-Way bill expiry warning */}
                 {(() => {
                   const expiry = checkEwayExpiry(entry.eway_valid_till);
                   if (!expiry) return null;
@@ -331,6 +328,7 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
                     </div>
                   );
                 })()}
+
                 {entry.remarks && (
                   <div style={{ marginTop: "8px", padding: "8px 10px", background: "#fef9e7", border: "1px solid #f5e090", borderRadius: "6px" }}>
                     <div style={{ fontSize: "10px", color: "#7a5500", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "2px" }}>📝 Remarks</div>
@@ -348,50 +346,6 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
     </div>
   );
 }
-
-const PillSelector = memo(({ label, value, onChange, options }) => (
-  <div style={{ gridColumn: "span 1" }}>
-    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
-      {label}
-    </label>
-    <div style={{ display: "flex", gap: "4px" }}>
-      {options.map(opt => (
-        <button key={opt.value} type="button" onClick={() => onChange(opt.value === value ? "" : opt.value)}
-          style={{
-            flex: 1, padding: "9px 4px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
-            background: value === opt.value ? (opt.color || NAVY) : "#fff",
-            color: value === opt.value ? "#fff" : NAVY,
-            border: `1px solid ${value === opt.value ? (opt.color || NAVY) : BORDER}`,
-            cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-          }}>{opt.label}</button>
-      ))}
-    </div>
-  </div>
-));
-
-const monoFields = new Set(["container_no", "vehicle_number", "gst_number", "eway_bill", "voyage_number"]);
-
-const Field = memo(({ label, field, placeholder, required, half, value, error, onChange, type = "text", listId, list }) => (
-  <div style={{ gridColumn: half ? "span 1" : "span 2" }}>
-    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
-      {label} {required && <span style={{ color: "#c0392b" }}>*</span>}
-    </label>
-    <input type={type} list={listId} value={value || ""} onChange={e => onChange(field, e.target.value)} placeholder={placeholder}
-      style={{
-        width: "100%", padding: "10px 14px", borderRadius: "8px",
-        background: error ? "#fef8f8" : "#fff",
-        border: `1px solid ${error ? "#e74c3c" : BORDER}`,
-        color: TEXT, fontSize: "14px", outline: "none", boxSizing: "border-box",
-        fontFamily: monoFields.has(field) ? "'DM Mono', monospace" : "inherit",
-        transition: "border-color 0.2s",
-      }}
-      onFocus={e => e.target.style.borderColor = NAVY}
-      onBlur={e => e.target.style.borderColor = error ? "#e74c3c" : BORDER}
-    />
-    {listId && list && <datalist id={listId}>{list.map(opt => <option key={opt} value={opt} />)}</datalist>}
-    {error && <div style={{ fontSize: "11px", color: "#c0392b", marginTop: "4px" }}>{error}</div>}
-  </div>
-));
 
 function Dashboard({ entries, containerMeta }) {
   const stats = useMemo(() => {
@@ -501,11 +455,9 @@ function ActivityTab({ activities }) {
       <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
         <div style={{ fontSize: "40px", marginBottom: "12px" }}>📜</div>
         <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No activity yet</div>
-        <div style={{ fontSize: "13px", color: MUTED, marginTop: "6px" }}>Actions by you and your team will appear here.</div>
       </div>
     );
   }
-
   const actionIcons = {
     cargo_created: { icon: "➕", color: "#15803d", label: "Cargo Added" },
     cargo_updated: { icon: "✏️", color: "#1e40af", label: "Cargo Updated" },
@@ -513,7 +465,6 @@ function ActivityTab({ activities }) {
     status_changed: { icon: "🔄", color: "#a85c00", label: "Status Changed" },
     vessel_movement: { icon: "🚢", color: "#6b21a8", label: "Vessel Movement" },
   };
-
   return (
     <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "8px" }}>
       {activities.map((a, i) => {
@@ -521,9 +472,7 @@ function ActivityTab({ activities }) {
         const userName = a.user_email ? a.user_email.split("@")[0] : "Someone";
         return (
           <div key={a.id} style={{ padding: "12px", borderBottom: i < activities.length - 1 ? `1px solid ${BORDER}` : "none", display: "flex", alignItems: "flex-start", gap: "10px" }}>
-            <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: `${info.color}15`, color: info.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
-              {info.icon}
-            </div>
+            <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: `${info.color}15`, color: info.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>{info.icon}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: "13px", color: TEXT, fontWeight: 500 }}>
                 <strong style={{ color: NAVY }}>{userName}</strong> · {info.label}
@@ -543,12 +492,11 @@ function ActivityTab({ activities }) {
   );
 }
 
-function VesselTab({ vesselMovements, uniqueVessels, userEmail, onAdd, onDelete }) {
+function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ vessel_name: "", voyage_number: "", event_type: "sailed", event_date: "", location: "", notes: "" });
   const [submitting, setSubmitting] = useState(false);
 
-  // Group by vessel + voyage
   const grouped = useMemo(() => {
     const g = {};
     vesselMovements.forEach(m => {
@@ -591,7 +539,7 @@ function VesselTab({ vesselMovements, uniqueVessels, userEmail, onAdd, onDelete 
       {showForm && (
         <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div style={{ gridColumn: "span 1" }}>
+            <div>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Vessel Name *</label>
               <input list="vessels-list-mov" value={form.vessel_name} onChange={e => setForm({ ...form, vessel_name: e.target.value })} placeholder="e.g. MV APJ Karan 2"
                 style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff" }} />
@@ -642,7 +590,6 @@ function VesselTab({ vesselMovements, uniqueVessels, userEmail, onAdd, onDelete 
         <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
           <div style={{ fontSize: "40px", marginBottom: "12px" }}>🚢</div>
           <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No vessel movements logged</div>
-          <div style={{ fontSize: "13px", color: MUTED, marginTop: "6px" }}>Tap "Add Movement" to log vessel events.</div>
         </div>
       ) : grouped.map(v => (
         <div key={`${v.vessel_name}-${v.voyage_number}`} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", marginBottom: "12px", overflow: "hidden" }}>
@@ -686,7 +633,7 @@ function PrintView({ containerNo, entries, meta, onClose }) {
     <div style={{ background: "#fff", color: "#000", padding: "32px", fontFamily: "'DM Sans', sans-serif", minHeight: "100vh" }}>
       <style>{`@media print { @page { size: A4; margin: 15mm; } body { background: #fff !important; } .no-print { display: none !important; } }`}</style>
       <div className="no-print" style={{ marginBottom: "20px", padding: "10px", background: OFFWHITE, borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-        <div style={{ fontSize: "13px", color: MUTED }}>Print preview — use Print to save as PDF</div>
+        <div style={{ fontSize: "13px", color: MUTED }}>Print preview</div>
         <div style={{ display: "flex", gap: "8px" }}>
           <button onClick={() => window.print()} style={{ padding: "8px 16px", background: NAVY, color: "#fff", border: "none", borderRadius: "6px", fontWeight: 600, cursor: "pointer" }}>🖨 Print</button>
           <button onClick={onClose} style={{ padding: "8px 16px", background: "#fff", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", fontWeight: 600, cursor: "pointer" }}>✕ Close</button>
@@ -737,7 +684,6 @@ function PrintView({ containerNo, entries, meta, onClose }) {
     </div>
   );
 }
-
 export default function CargoApp({ session }) {
   const [entries, setEntries] = useState([]);
   const [containerMeta, setContainerMeta] = useState({});
@@ -817,14 +763,12 @@ export default function CargoApp({ session }) {
     };
   }, []);
 
-  // Push notification subscription check on mount
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     navigator.serviceWorker.register("/sw.js").then(async (reg) => {
       const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        setPushEnabled(true);
-      } else {
+      if (sub) setPushEnabled(true);
+      else {
         const dismissed = localStorage.getItem("push-prompt-dismissed");
         if (!dismissed && Notification.permission === "default") {
           setTimeout(() => setPushPrompt(true), 3000);
@@ -833,50 +777,36 @@ export default function CargoApp({ session }) {
     }).catch(err => console.error("SW registration failed:", err));
   }, []);
 
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const enablePush = async () => {
     try {
       const reg = await navigator.serviceWorker.ready;
       const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        showToast("Notifications blocked. Enable from browser settings.", "error");
-        setPushPrompt(false);
-        return;
-      }
+      if (permission !== "granted") { showToast("Notifications blocked.", "error"); setPushPrompt(false); return; }
       const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-      if (!vapidKey) {
-        showToast("Push not configured.", "error");
-        return;
-      }
+      if (!vapidKey) { showToast("Push not configured.", "error"); return; }
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       });
       const json = sub.toJSON();
       await supabase.from("push_subscriptions").upsert({
-        user_id: userId,
-        user_email: userEmail,
-        endpoint: json.endpoint,
-        p256dh: json.keys.p256dh,
-        auth: json.keys.auth,
+        user_id: userId, user_email: userEmail,
+        endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth,
         user_agent: navigator.userAgent,
       }, { onConflict: "endpoint" });
-      setPushEnabled(true);
-      setPushPrompt(false);
+      setPushEnabled(true); setPushPrompt(false);
       showToast("Notifications enabled! 🔔");
-    } catch (err) {
-      console.error("Enable push failed:", err);
-      showToast("Could not enable notifications: " + err.message, "error");
-    }
+    } catch (err) { showToast("Could not enable: " + err.message, "error"); }
   };
 
   const dismissPushPrompt = () => {
     localStorage.setItem("push-prompt-dismissed", "1");
     setPushPrompt(false);
-  };
-
-  const showToast = (msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
   };
 
   const handleFieldChange = useCallback((field, value) => {
@@ -925,11 +855,7 @@ export default function CargoApp({ session }) {
       const existing = entries.find(e => e.container_no === containerKey);
       showToast(existing ? `Added to container ${containerKey} (LCL grouped).` : "New cargo entry logged.");
       logActivity({ action: "cargo_created", entityType: "cargo", entityId: inserted?.id, containerNo: containerKey, details: { shipper: payload.shipper, consignee: payload.consignee }, userEmail });
-      sendPushNotification(
-        `📦 New cargo: ${containerKey}`,
-        `${payload.shipper} → ${payload.consignee} (logged by ${userEmail.split("@")[0]})`,
-        userId
-      );
+      sendPushNotification(`📦 New cargo: ${containerKey}`, `${payload.shipper} → ${payload.consignee} (logged by ${userEmail.split("@")[0]})`, userId);
     }
 
     const existingMeta = containerMeta[containerKey];
@@ -966,16 +892,6 @@ export default function CargoApp({ session }) {
     showToast("Entry deleted.", "error");
   };
 
-  const updateContainerLoadType = async (containerNo, value) => {
-    const existing = containerMeta[containerNo] || { container_no: containerNo };
-    const override = value === "auto" ? null : value;
-    const { error } = await supabase.from("container_meta").upsert({
-      ...existing, container_no: containerNo, load_type_override: override, updated_at: new Date().toISOString()
-    });
-    if (error) { showToast(error.message, "error"); return; }
-    showToast(value === "auto" ? "Set to auto-detect." : `Marked as ${value}.`);
-  };
-
   const updateContainerStatus = async (containerNo, status) => {
     const existing = containerMeta[containerNo] || { container_no: containerNo };
     const oldStatus = existing.status || "stuffing";
@@ -983,6 +899,14 @@ export default function CargoApp({ session }) {
     if (error) { showToast(error.message, "error"); return; }
     showToast(`Status updated to ${getStatusInfo(status).label}.`);
     logActivity({ action: "status_changed", entityType: "container", containerNo, details: { from: getStatusInfo(oldStatus).label, to: getStatusInfo(status).label }, userEmail });
+  };
+
+  const updateContainerLoadType = async (containerNo, value) => {
+    const existing = containerMeta[containerNo] || { container_no: containerNo };
+    const override = value === "auto" ? null : value;
+    const { error } = await supabase.from("container_meta").upsert({ ...existing, container_no: containerNo, load_type_override: override, updated_at: new Date().toISOString() });
+    if (error) { showToast(error.message, "error"); return; }
+    showToast(value === "auto" ? "Set to auto-detect." : `Marked as ${value}.`);
   };
 
   const addVesselMovement = async (data) => {
@@ -998,11 +922,7 @@ export default function CargoApp({ session }) {
     const { error } = await supabase.from("vessel_movements").insert(payload);
     if (error) { showToast(error.message, "error"); return; }
     showToast("Vessel movement logged.");
-    logActivity({
-      action: "vessel_movement", entityType: "vessel",
-      details: { summary: `${data.vessel_name} · ${getVesselEvent(data.event_type).label}${data.location ? ` at ${data.location}` : ""}` },
-      userEmail
-    });
+    logActivity({ action: "vessel_movement", entityType: "vessel", details: { summary: `${data.vessel_name} · ${getVesselEvent(data.event_type).label}${data.location ? ` at ${data.location}` : ""}` }, userEmail });
   };
 
   const deleteVesselMovement = async (id) => {
@@ -1054,28 +974,16 @@ export default function CargoApp({ session }) {
     const rows = entries.map(e => {
       const m = containerMeta[e.container_no] || {};
       return {
-       "Container No.": e.container_no,
-        "Container Size": e.container_size || "",
-        "Load Type": e.load_type || "—",
-        "Status": getStatusInfo(m.status || "stuffing").label,
-        "Shipper": e.shipper,
-        "Consignee": e.consignee,
-        "GST No.": e.gst_number || "",
-        "E-Way Bill": e.eway_bill || "",
-        "E-Way Valid Till": e.eway_valid_till || "",
-        "Quantity": e.quantity || "",
-        "Cargo Weight": e.cargo_weight || "",
-        "Seal No.": e.seal_no || "",
+        "Container No.": e.container_no, "Container Size": e.container_size || "",
+        "Load Type": e.load_type || "—", "Status": getStatusInfo(m.status || "stuffing").label,
+        "Shipper": e.shipper, "Consignee": e.consignee,
+        "GST No.": e.gst_number || "", "E-Way Bill": e.eway_bill || "", "E-Way Valid Till": e.eway_valid_till || "",
+        "Quantity": e.quantity || "", "Cargo Weight": e.cargo_weight || "", "Seal No.": e.seal_no || "",
         "Goods Description": e.goods_description,
-        "Freight Status": e.freight_status || "",
-        "Payment Status": e.payment_status || "",
-        "Vehicle No.": e.vehicle_number || "",
-        "Vessel": m.vessel_name || "",
-        "Voyage": m.voyage_number || "",
-        "Booking Date": e.booking_date || "",
-        "Remarks": e.remarks || "",
-        "Logged By": e.created_by_email || "",
-        "Logged At": new Date(e.created_at).toLocaleString("en-IN"),
+        "Freight Status": e.freight_status || "", "Payment Status": e.payment_status || "",
+        "Vehicle No.": e.vehicle_number || "", "Vessel": m.vessel_name || "", "Voyage": m.voyage_number || "",
+        "Booking Date": e.booking_date || "", "Remarks": e.remarks || "",
+        "Logged By": e.created_by_email || "", "Logged At": new Date(e.created_at).toLocaleString("en-IN"),
       };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -1091,8 +999,7 @@ export default function CargoApp({ session }) {
     if (cargos.length === 0) return;
     const rows = cargos.map((e, i) => ({
       "#": i + 1, "Shipper": e.shipper, "Consignee": e.consignee,
-      "GST No.": e.gst_number || "", "E-Way Bill": e.eway_bill || "",
-      "Valid Till": e.eway_valid_till || "",
+      "GST No.": e.gst_number || "", "E-Way Bill": e.eway_bill || "", "Valid Till": e.eway_valid_till || "",
       "Quantity": e.quantity || "", "Weight": e.cargo_weight || "",
       "Seal No.": e.seal_no || "", "Size": e.container_size || "",
       "Goods Description": e.goods_description,
@@ -1118,9 +1025,7 @@ export default function CargoApp({ session }) {
     );
   }
 
-  if (printContainer) {
-    return <PrintView containerNo={printContainer} entries={grouped[printContainer] || []} meta={containerMeta[printContainer]} onClose={() => setPrintContainer(null)} />;
-  }
+  if (printContainer) return <PrintView containerNo={printContainer} entries={grouped[printContainer] || []} meta={containerMeta[printContainer]} onClose={() => setPrintContainer(null)} />;
 
   return (
     <div style={{ minHeight: "100vh", background: OFFWHITE, color: TEXT, fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
@@ -1133,9 +1038,8 @@ export default function CargoApp({ session }) {
 
       <div style={{
         background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`,
-        padding: "0 16px", display: "flex", alignItems: "center",
-        justifyContent: "space-between", height: "64px",
-        position: "sticky", top: 0, zIndex: 100,
+        padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        height: "64px", position: "sticky", top: 0, zIndex: 100,
         boxShadow: "0 2px 12px rgba(13,30,60,0.3)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
@@ -1150,12 +1054,8 @@ export default function CargoApp({ session }) {
           {showMenu && (
             <div style={{ position: "absolute", right: 0, top: "100%", marginTop: "8px", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", boxShadow: "0 4px 20px rgba(13,30,60,0.2)", zIndex: 200, minWidth: "240px", overflow: "hidden" }}>
               <button onClick={() => { exportAllExcel(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left" }}>📊 Export All to Excel</button>
-              {!pushEnabled && (
-                <button onClick={() => { enablePush(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🔔 Enable Push Notifications</button>
-              )}
-              {pushEnabled && (
-                <div style={{ padding: "12px 14px", fontSize: "12px", color: "#15803d", borderTop: `1px solid ${BORDER}`, fontWeight: 600 }}>🔔 Notifications: ON</div>
-              )}
+              {!pushEnabled && <button onClick={() => { enablePush(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🔔 Enable Push Notifications</button>}
+              {pushEnabled && <div style={{ padding: "12px 14px", fontSize: "12px", color: "#15803d", borderTop: `1px solid ${BORDER}`, fontWeight: 600 }}>🔔 Notifications: ON</div>}
               <button onClick={() => { handleLogout(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: "#c0392b", fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🚪 Log Out</button>
             </div>
           )}
@@ -1202,11 +1102,8 @@ export default function CargoApp({ session }) {
                 <Field label="GST Number" field="gst_number" placeholder="e.g. 19AABCK1234A1Z5" half value={form.gst_number} error={errors.gst_number} onChange={handleFieldChange} />
                 <Field label="E-Way Bill Number" field="eway_bill" placeholder="e.g. 331234567890" half value={form.eway_bill} error={errors.eway_bill} onChange={handleFieldChange} />
                 <Field label="Quantity" field="quantity" placeholder="e.g. 10 Boxes / 500 Kgs" half value={form.quantity} error={errors.quantity} onChange={handleFieldChange} />
-                <Field label="Booking Date" field="booking_date" type="date" half value={form.booking_date} error={errors.booking_date} onChange={handleFieldChange} />
                 <div style={{ gridColumn: "span 1" }}>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
-                    Load Type
-                  </label>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Load Type</label>
                   <div style={{ display: "flex", gap: "4px" }}>
                     {["", "FCL", "LCL"].map(opt => (
                       <button key={opt} type="button" onClick={() => handleFieldChange("load_type", opt)}
@@ -1221,9 +1118,7 @@ export default function CargoApp({ session }) {
                   </div>
                 </div>
                 <div style={{ gridColumn: "span 1" }}>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
-                    Container Size
-                  </label>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Container Size</label>
                   <div style={{ display: "flex", gap: "4px" }}>
                     {CONTAINER_SIZES.map(opt => (
                       <button key={opt} type="button" onClick={() => handleFieldChange("container_size", form.container_size === opt ? "" : opt)}
@@ -1232,7 +1127,7 @@ export default function CargoApp({ session }) {
                           background: form.container_size === opt ? NAVY : "#fff",
                           color: form.container_size === opt ? "#fff" : NAVY,
                           border: `1px solid ${form.container_size === opt ? NAVY : BORDER}`,
-                          cursor: "pointer", fontFamily: "inherit", fontFamily: "'DM Mono', monospace",
+                          cursor: "pointer", fontFamily: "'DM Mono', monospace",
                         }}>{opt}</button>
                     ))}
                   </div>
@@ -1247,6 +1142,12 @@ export default function CargoApp({ session }) {
                 <PillSelector label="💳 Payment" value={form.payment_status}
                   onChange={(v) => handleFieldChange("payment_status", v)}
                   options={PAYMENT_STATUSES.map(s => ({ value: s.id, label: s.label, color: s.color }))} />
+                <div style={{ gridColumn: "span 2" }}>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Goods Description <span style={{ color: "#c0392b" }}>*</span></label>
+                  <textarea value={form.goods_description || ""} onChange={e => handleFieldChange("goods_description", e.target.value)} placeholder="Describe the goods..." rows={2}
+                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: errors.goods_description ? "#fef8f8" : "#fff", border: `1px solid ${errors.goods_description ? "#e74c3c" : BORDER}`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                  {errors.goods_description && <div style={{ fontSize: "11px", color: "#c0392b", marginTop: "4px" }}>{errors.goods_description}</div>}
+                </div>
                 <Field label="Container No." field="container_no" placeholder="e.g. MSCU1234567" required half value={form.container_no} error={errors.container_no} onChange={handleFieldChange} />
                 <Field label="Vehicle Number" field="vehicle_number" placeholder="e.g. WB12AB3456" half value={form.vehicle_number} error={errors.vehicle_number} onChange={handleFieldChange} />
                 <Field label="Vessel Name" field="vessel_name" placeholder="e.g. MV APJ Karan 2" half value={form.vessel_name} error={errors.vessel_name} onChange={handleFieldChange} listId="vessels-list" list={uniqueVessels} />
@@ -1274,6 +1175,7 @@ export default function CargoApp({ session }) {
               </div>
               <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); setActiveTab("entry"); }} style={{ padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`, border: "none", color: OFFWHITE, cursor: "pointer" }}>+ New Entry</button>
             </div>
+
             {(() => {
               const expiringEntries = entries.filter(e => {
                 const exp = checkEwayExpiry(e.eway_valid_till);
@@ -1281,20 +1183,18 @@ export default function CargoApp({ session }) {
               });
               if (expiringEntries.length === 0) return null;
               return (
-                <div style={{
-                  background: "#fdecea", border: "1px solid #f5b8b0", borderRadius: "10px",
-                  padding: "12px 14px", marginBottom: "12px", display: "flex", gap: "10px", alignItems: "flex-start",
-                }}>
+                <div style={{ background: "#fdecea", border: "1px solid #f5b8b0", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px", display: "flex", gap: "10px", alignItems: "flex-start" }}>
                   <span style={{ fontSize: "20px" }}>🚨</span>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: "13px", fontWeight: 700, color: "#c0392b" }}>E-Way Bills Need Attention</div>
                     <div style={{ fontSize: "11px", color: "#c0392b", opacity: 0.8, marginTop: "2px" }}>
-                      {expiringEntries.length} cargo{expiringEntries.length > 1 ? "s have" : " has"} an expired or critical e-way bill. Check containers: {[...new Set(expiringEntries.map(e => e.container_no))].join(", ")}
+                      {expiringEntries.length} cargo{expiringEntries.length > 1 ? "s have" : " has"} an expired or critical e-way bill. Check: {[...new Set(expiringEntries.map(e => e.container_no))].join(", ")}
                     </div>
                   </div>
                 </div>
               );
             })()}
+
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: MUTED, fontSize: "14px" }}>🔍</span>
@@ -1302,6 +1202,7 @@ export default function CargoApp({ session }) {
               </div>
               <button onClick={() => setShowFilters(!showFilters)} style={{ padding: "11px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, background: showFilters ? NAVY : "#fff", border: `1px solid ${showFilters ? NAVY : BORDER}`, color: showFilters ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>🔧 {(statusFilter !== "all" || dateFromFilter || dateToFilter) ? "•" : ""} Filters</button>
             </div>
+
             {showFilters && (
               <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
@@ -1326,6 +1227,7 @@ export default function CargoApp({ session }) {
                 {(dateFromFilter || dateToFilter || statusFilter !== "all") && <button onClick={() => { setDateFromFilter(""); setDateToFilter(""); setStatusFilter("all"); }} style={{ marginTop: "10px", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "#fff", border: `1px solid ${BORDER}`, color: MUTED, cursor: "pointer" }}>✕ Clear filters</button>}
               </div>
             )}
+
             {filteredKeys.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
                 <div style={{ fontSize: "40px", marginBottom: "12px" }}>📭</div>
@@ -1333,16 +1235,15 @@ export default function CargoApp({ session }) {
               </div>
             ) : filteredKeys.map(key => (
               <ContainerCard key={key} containerNo={key} entries={grouped[key]} meta={containerMeta[key]}
-                attachments={attachments} userEmail={userEmail}
+                userEmail={userEmail}
                 onEdit={handleEdit} onDelete={handleDelete} onUpdateStatus={updateContainerStatus}
                 onPrint={setPrintContainer} onExportContainer={exportContainerExcel}
-                onDeleteAttachment={deleteAttachment}
                 onUpdateLoadType={updateContainerLoadType} />
             ))}
           </div>
         )}
 
-        {activeTab === "vessel" && <VesselTab vesselMovements={vesselMovements} uniqueVessels={uniqueVessels} userEmail={userEmail} onAdd={addVesselMovement} onDelete={deleteVesselMovement} />}
+        {activeTab === "vessel" && <VesselTab vesselMovements={vesselMovements} uniqueVessels={uniqueVessels} onAdd={addVesselMovement} onDelete={deleteVesselMovement} />}
 
         {activeTab === "activity" && (
           <div>
