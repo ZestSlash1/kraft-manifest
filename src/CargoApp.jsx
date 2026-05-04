@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import * as XLSX from "xlsx";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { supabase } from "./supabaseClient";
+import AIDocReader from "./AIDocReader";
 
 const NAVY = "#0d1e3c";
 const NAVY2 = "#1a3a6a";
@@ -32,6 +33,8 @@ const initialForm = {
   shipper: "", consignee: "", gst_number: "", eway_bill: "",
   quantity: "", goods_description: "", container_no: "", vehicle_number: "",
   booking_date: "", vessel_name: "", voyage_number: "", remarks: "",
+  load_type: "", container_size: "", seal_no: "", cargo_weight: "",
+  eway_valid_till: "", freight_status: "", payment_status: "",
 };
 
 function todayStr() {
@@ -65,6 +68,62 @@ function timeAgo(d) {
 
 function getStatusInfo(id) {
   return STATUSES.find(s => s.id === id) || STATUSES[0];
+}
+
+const CONTAINER_SIZES = ["20'", "40'", "40HC", "45HC"];
+
+const FREIGHT_STATUSES = [
+  { id: "to_pay", label: "To Pay", color: "#a85c00", bg: "#fef3e0", border: "#f5d090" },
+  { id: "prepaid", label: "Prepaid", color: "#1e40af", bg: "#e0e8f7", border: "#a8b8e0" },
+  { id: "paid", label: "Paid", color: "#15803d", bg: "#dcf5e3", border: "#9eddb8" },
+];
+
+const PAYMENT_STATUSES = [
+  { id: "pending", label: "Pending", color: "#a85c00", bg: "#fef3e0", border: "#f5d090" },
+  { id: "partial", label: "Partial", color: "#1e40af", bg: "#e0e8f7", border: "#a8b8e0" },
+  { id: "paid", label: "Paid", color: "#15803d", bg: "#dcf5e3", border: "#9eddb8" },
+];
+
+function getFreightInfo(id) {
+  return FREIGHT_STATUSES.find(s => s.id === id);
+}
+
+function getPaymentInfo(id) {
+  return PAYMENT_STATUSES.find(s => s.id === id);
+}
+
+// E-way bill expiry: returns { state, daysLeft, message }
+function checkEwayExpiry(validTill) {
+  if (!validTill) return null;
+  try {
+    const now = new Date();
+    const expiry = new Date(validTill);
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysLeft = Math.ceil((expiry - now) / msPerDay);
+    if (daysLeft < 0) return { state: "expired", daysLeft, message: `Expired ${Math.abs(daysLeft)}d ago` };
+    if (daysLeft === 0) return { state: "today", daysLeft, message: "Expires today!" };
+    if (daysLeft <= 1) return { state: "critical", daysLeft, message: "Expires tomorrow" };
+    if (daysLeft <= 3) return { state: "warning", daysLeft, message: `${daysLeft}d left` };
+    return null; // No warning needed
+  } catch { return null; }
+}
+
+// Determine container's effective load type
+function getContainerLoadType(entries, meta) {
+  // If user manually set an override, use that
+  if (meta?.load_type_override) return meta.load_type_override.toUpperCase();
+
+  // Otherwise auto-detect from cargo entries
+  const types = entries.map(e => e.load_type).filter(Boolean);
+
+  // If any cargo is explicitly LCL, the container is LCL
+  if (types.some(t => t.toUpperCase() === "LCL")) return "LCL";
+
+  // If all cargos explicitly FCL and only 1 cargo → FCL
+  if (entries.length === 1 && types[0]?.toUpperCase() === "FCL") return "FCL";
+
+  // Default rule: 1 cargo = FCL, multiple = LCL
+  return entries.length === 1 ? "FCL" : "LCL";
 }
 
 function getVesselEvent(id) {
@@ -137,7 +196,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function ContainerCard({ containerNo, entries, meta, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer }) {
+function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer, onDeleteAttachment, onUpdateLoadType }) {
   const [expanded, setExpanded] = useState(true);
   const [statusMenu, setStatusMenu] = useState(false);
   const status = meta?.status || "stuffing";
@@ -165,6 +224,7 @@ function ContainerCard({ containerNo, entries, meta, onEdit, onDelete, onUpdateS
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+          <Badge color={getContainerLoadType(entries, meta) === "FCL" ? "green" : "amber"}>{getContainerLoadType(entries, meta)}</Badge>
           <Badge color="amber">{entries.length}</Badge>
           <span style={{ color: "rgba(240,237,240,0.7)", fontSize: "18px", display: "inline-block", transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▾</span>
         </div>
@@ -186,6 +246,20 @@ function ContainerCard({ containerNo, entries, meta, onEdit, onDelete, onUpdateS
                 </div>
               )}
             </div>
+            <div style={{ position: "relative" }}>
+              <select value={meta?.load_type_override || "auto"}
+                onChange={(e) => { e.stopPropagation(); onUpdateLoadType(containerNo, e.target.value); }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px",
+                  color: NAVY, padding: "5px 8px", fontSize: "11px", fontWeight: 600,
+                  fontFamily: "'DM Mono', monospace", cursor: "pointer",
+                }}>
+                <option value="auto">AUTO ({getContainerLoadType(entries, meta)})</option>
+                <option value="FCL">FCL</option>
+                <option value="LCL">LCL</option>
+              </select>
+            </div>
             <div style={{ flex: 1 }} />
             <button onClick={(e) => { e.stopPropagation(); onExportContainer(containerNo); }} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>📊 Excel</button>
             <button onClick={(e) => { e.stopPropagation(); onPrint(containerNo); }} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>🖨 Print</button>
@@ -195,9 +269,9 @@ function ContainerCard({ containerNo, entries, meta, onEdit, onDelete, onUpdateS
             {entries.map((entry, idx) => (
               <div key={entry.id} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                 <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", color: MUTED }}>#{String(idx + 1).padStart(2, "0")}</span>
-                    <Badge color="slate">LCL</Badge>
+                    {entry.load_type && <Badge color={entry.load_type.toUpperCase() === "FCL" ? "navy" : "amber"}>{entry.load_type.toUpperCase()}</Badge>}
                     {entry.booking_date && <Badge color="navy">{formatDate(entry.booking_date)}</Badge>}
                     {entry.created_by_email && <Badge color="slate">👤 {entry.created_by_email.split("@")[0]}</Badge>}
                   </div>
@@ -211,13 +285,52 @@ function ContainerCard({ containerNo, entries, meta, onEdit, onDelete, onUpdateS
                     ["Shipper", entry.shipper], ["Consignee", entry.consignee],
                     ["GST No.", entry.gst_number || "—"], ["E-Way Bill", entry.eway_bill || "—"],
                     ["Quantity", entry.quantity || "—"], ["Goods", entry.goods_description],
-                  ].map(([label, value]) => (
+                    entry.container_size && ["Size", entry.container_size],
+                    entry.seal_no && ["Seal No.", entry.seal_no],
+                    entry.cargo_weight && ["Weight", entry.cargo_weight],
+                  ].filter(Boolean).map(([label, value]) => (
                     <div key={label}>
                       <div style={{ fontSize: "10px", color: MUTED, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "2px" }}>{label}</div>
                       <div style={{ fontSize: "13px", color: TEXT, fontWeight: 500, wordBreak: "break-word" }}>{value}</div>
                     </div>
                   ))}
                 </div>
+
+                {/* Freight + Payment status pills */}
+                {(entry.freight_status || entry.payment_status) && (
+                  <div style={{ display: "flex", gap: "6px", marginTop: "10px", flexWrap: "wrap" }}>
+                    {entry.freight_status && (() => {
+                      const f = getFreightInfo(entry.freight_status);
+                      return f ? <span style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", background: f.bg, color: f.color, border: `1px solid ${f.border}`, fontFamily: "'DM Mono', monospace", textTransform: "uppercase" }}>💰 Freight {f.label}</span> : null;
+                    })()}
+                    {entry.payment_status && (() => {
+                      const p = getPaymentInfo(entry.payment_status);
+                      return p ? <span style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", background: p.bg, color: p.color, border: `1px solid ${p.border}`, fontFamily: "'DM Mono', monospace", textTransform: "uppercase" }}>💳 Payment {p.label}</span> : null;
+                    })()}
+                  </div>
+                )}
+
+                {/* E-Way bill expiry warning */}
+                {(() => {
+                  const expiry = checkEwayExpiry(entry.eway_valid_till);
+                  if (!expiry) return null;
+                  const colors = {
+                    expired: { bg: "#fdecea", border: "#f5b8b0", color: "#c0392b", icon: "🚨" },
+                    today: { bg: "#fdecea", border: "#f5b8b0", color: "#c0392b", icon: "🚨" },
+                    critical: { bg: "#fef3e0", border: "#f5d090", color: "#a85c00", icon: "⚠️" },
+                    warning: { bg: "#fef3e0", border: "#f5d090", color: "#a85c00", icon: "⏰" },
+                  };
+                  const c = colors[expiry.state];
+                  return (
+                    <div style={{ marginTop: "8px", padding: "8px 10px", background: c.bg, border: `1px solid ${c.border}`, borderRadius: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "14px" }}>{c.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "11px", color: c.color, fontWeight: 700 }}>E-Way Bill {expiry.message}</div>
+                        <div style={{ fontSize: "10px", color: c.color, opacity: 0.75 }}>Valid till {formatDate(entry.eway_valid_till)}</div>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {entry.remarks && (
                   <div style={{ marginTop: "8px", padding: "8px 10px", background: "#fef9e7", border: "1px solid #f5e090", borderRadius: "6px" }}>
                     <div style={{ fontSize: "10px", color: "#7a5500", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "2px" }}>📝 Remarks</div>
@@ -235,6 +348,26 @@ function ContainerCard({ containerNo, entries, meta, onEdit, onDelete, onUpdateS
     </div>
   );
 }
+
+const PillSelector = memo(({ label, value, onChange, options }) => (
+  <div style={{ gridColumn: "span 1" }}>
+    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
+      {label}
+    </label>
+    <div style={{ display: "flex", gap: "4px" }}>
+      {options.map(opt => (
+        <button key={opt.value} type="button" onClick={() => onChange(opt.value === value ? "" : opt.value)}
+          style={{
+            flex: 1, padding: "9px 4px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
+            background: value === opt.value ? (opt.color || NAVY) : "#fff",
+            color: value === opt.value ? "#fff" : NAVY,
+            border: `1px solid ${value === opt.value ? (opt.color || NAVY) : BORDER}`,
+            cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+          }}>{opt.label}</button>
+      ))}
+    </div>
+  </div>
+));
 
 const monoFields = new Set(["container_no", "vehicle_number", "gst_number", "eway_bill", "voyage_number"]);
 
@@ -771,6 +904,13 @@ export default function CargoApp({ session }) {
       container_no: containerKey, vehicle_number: form.vehicle_number || null,
       booking_date: form.booking_date || null, vessel_name: form.vessel_name || null,
       voyage_number: form.voyage_number || null, remarks: form.remarks || null,
+      load_type: form.load_type || null,
+      container_size: form.container_size || null,
+      seal_no: form.seal_no || null,
+      cargo_weight: form.cargo_weight || null,
+      eway_valid_till: form.eway_valid_till || null,
+      freight_status: form.freight_status || null,
+      payment_status: form.payment_status || null,
       created_by_email: userEmail,
     };
 
@@ -824,6 +964,16 @@ export default function CargoApp({ session }) {
     if (entry) logActivity({ action: "cargo_deleted", entityType: "cargo", entityId: deleteConfirm, containerNo: entry.container_no, details: { shipper: entry.shipper }, userEmail });
     setDeleteConfirm(null);
     showToast("Entry deleted.", "error");
+  };
+
+  const updateContainerLoadType = async (containerNo, value) => {
+    const existing = containerMeta[containerNo] || { container_no: containerNo };
+    const override = value === "auto" ? null : value;
+    const { error } = await supabase.from("container_meta").upsert({
+      ...existing, container_no: containerNo, load_type_override: override, updated_at: new Date().toISOString()
+    });
+    if (error) { showToast(error.message, "error"); return; }
+    showToast(value === "auto" ? "Set to auto-detect." : `Marked as ${value}.`);
   };
 
   const updateContainerStatus = async (containerNo, status) => {
@@ -904,13 +1054,28 @@ export default function CargoApp({ session }) {
     const rows = entries.map(e => {
       const m = containerMeta[e.container_no] || {};
       return {
-        "Container No.": e.container_no, "Status": getStatusInfo(m.status || "stuffing").label,
-        "Shipper": e.shipper, "Consignee": e.consignee, "GST No.": e.gst_number || "",
-        "E-Way Bill": e.eway_bill || "", "Quantity": e.quantity || "",
-        "Goods Description": e.goods_description, "Vehicle No.": e.vehicle_number || "",
-        "Vessel": m.vessel_name || "", "Voyage": m.voyage_number || "",
-        "Booking Date": e.booking_date || "", "Remarks": e.remarks || "",
-        "Logged By": e.created_by_email || "", "Logged At": new Date(e.created_at).toLocaleString("en-IN"),
+       "Container No.": e.container_no,
+        "Container Size": e.container_size || "",
+        "Load Type": e.load_type || "—",
+        "Status": getStatusInfo(m.status || "stuffing").label,
+        "Shipper": e.shipper,
+        "Consignee": e.consignee,
+        "GST No.": e.gst_number || "",
+        "E-Way Bill": e.eway_bill || "",
+        "E-Way Valid Till": e.eway_valid_till || "",
+        "Quantity": e.quantity || "",
+        "Cargo Weight": e.cargo_weight || "",
+        "Seal No.": e.seal_no || "",
+        "Goods Description": e.goods_description,
+        "Freight Status": e.freight_status || "",
+        "Payment Status": e.payment_status || "",
+        "Vehicle No.": e.vehicle_number || "",
+        "Vessel": m.vessel_name || "",
+        "Voyage": m.voyage_number || "",
+        "Booking Date": e.booking_date || "",
+        "Remarks": e.remarks || "",
+        "Logged By": e.created_by_email || "",
+        "Logged At": new Date(e.created_at).toLocaleString("en-IN"),
       };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -927,7 +1092,11 @@ export default function CargoApp({ session }) {
     const rows = cargos.map((e, i) => ({
       "#": i + 1, "Shipper": e.shipper, "Consignee": e.consignee,
       "GST No.": e.gst_number || "", "E-Way Bill": e.eway_bill || "",
-      "Quantity": e.quantity || "", "Goods Description": e.goods_description,
+      "Valid Till": e.eway_valid_till || "",
+      "Quantity": e.quantity || "", "Weight": e.cargo_weight || "",
+      "Seal No.": e.seal_no || "", "Size": e.container_size || "",
+      "Goods Description": e.goods_description,
+      "Freight": e.freight_status || "", "Payment": e.payment_status || "",
       "Booking Date": formatDate(e.booking_date), "Remarks": e.remarks || "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -1017,6 +1186,7 @@ export default function CargoApp({ session }) {
               <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>{editId ? "Update the details below and save." : "Same container number will be grouped automatically as LCL cargo."}</p>
             </div>
             <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "14px", padding: "20px" }}>
+              {!editId && <AIDocReader onExtracted={(data) => setForm(f => ({ ...f, ...data }))} />}
               {lclBannerEntry && (
                 <div style={{ background: "#e6f7ed", border: "1px solid #9eddb8", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={{ fontSize: "18px" }}>📦</span>
@@ -1033,12 +1203,50 @@ export default function CargoApp({ session }) {
                 <Field label="E-Way Bill Number" field="eway_bill" placeholder="e.g. 331234567890" half value={form.eway_bill} error={errors.eway_bill} onChange={handleFieldChange} />
                 <Field label="Quantity" field="quantity" placeholder="e.g. 10 Boxes / 500 Kgs" half value={form.quantity} error={errors.quantity} onChange={handleFieldChange} />
                 <Field label="Booking Date" field="booking_date" type="date" half value={form.booking_date} error={errors.booking_date} onChange={handleFieldChange} />
-                <div style={{ gridColumn: "span 2" }}>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Goods Description <span style={{ color: "#c0392b" }}>*</span></label>
-                  <textarea value={form.goods_description || ""} onChange={e => handleFieldChange("goods_description", e.target.value)} placeholder="Describe the goods..." rows={2}
-                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: errors.goods_description ? "#fef8f8" : "#fff", border: `1px solid ${errors.goods_description ? "#e74c3c" : BORDER}`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
-                  {errors.goods_description && <div style={{ fontSize: "11px", color: "#c0392b", marginTop: "4px" }}>{errors.goods_description}</div>}
+                <div style={{ gridColumn: "span 1" }}>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
+                    Load Type
+                  </label>
+                  <div style={{ display: "flex", gap: "4px" }}>
+                    {["", "FCL", "LCL"].map(opt => (
+                      <button key={opt} type="button" onClick={() => handleFieldChange("load_type", opt)}
+                        style={{
+                          flex: 1, padding: "9px 4px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
+                          background: form.load_type === opt ? NAVY : "#fff",
+                          color: form.load_type === opt ? "#fff" : NAVY,
+                          border: `1px solid ${form.load_type === opt ? NAVY : BORDER}`,
+                          cursor: "pointer", fontFamily: "inherit",
+                        }}>{opt || "Auto"}</button>
+                    ))}
+                  </div>
                 </div>
+                <div style={{ gridColumn: "span 1" }}>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
+                    Container Size
+                  </label>
+                  <div style={{ display: "flex", gap: "4px" }}>
+                    {CONTAINER_SIZES.map(opt => (
+                      <button key={opt} type="button" onClick={() => handleFieldChange("container_size", form.container_size === opt ? "" : opt)}
+                        style={{
+                          flex: 1, padding: "9px 2px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
+                          background: form.container_size === opt ? NAVY : "#fff",
+                          color: form.container_size === opt ? "#fff" : NAVY,
+                          border: `1px solid ${form.container_size === opt ? NAVY : BORDER}`,
+                          cursor: "pointer", fontFamily: "inherit", fontFamily: "'DM Mono', monospace",
+                        }}>{opt}</button>
+                    ))}
+                  </div>
+                </div>
+                <Field label="Seal No." field="seal_no" placeholder="e.g. SL123456" half value={form.seal_no} error={errors.seal_no} onChange={handleFieldChange} />
+                <Field label="Cargo Weight" field="cargo_weight" placeholder="e.g. 1200 Kgs" half value={form.cargo_weight} error={errors.cargo_weight} onChange={handleFieldChange} />
+                <Field label="Booking Date" field="booking_date" type="date" half value={form.booking_date} error={errors.booking_date} onChange={handleFieldChange} />
+                <Field label="E-Way Bill Valid Till" field="eway_valid_till" type="date" half value={form.eway_valid_till} error={errors.eway_valid_till} onChange={handleFieldChange} />
+                <PillSelector label="💰 Freight" value={form.freight_status}
+                  onChange={(v) => handleFieldChange("freight_status", v)}
+                  options={FREIGHT_STATUSES.map(s => ({ value: s.id, label: s.label, color: s.color }))} />
+                <PillSelector label="💳 Payment" value={form.payment_status}
+                  onChange={(v) => handleFieldChange("payment_status", v)}
+                  options={PAYMENT_STATUSES.map(s => ({ value: s.id, label: s.label, color: s.color }))} />
                 <Field label="Container No." field="container_no" placeholder="e.g. MSCU1234567" required half value={form.container_no} error={errors.container_no} onChange={handleFieldChange} />
                 <Field label="Vehicle Number" field="vehicle_number" placeholder="e.g. WB12AB3456" half value={form.vehicle_number} error={errors.vehicle_number} onChange={handleFieldChange} />
                 <Field label="Vessel Name" field="vessel_name" placeholder="e.g. MV APJ Karan 2" half value={form.vessel_name} error={errors.vessel_name} onChange={handleFieldChange} listId="vessels-list" list={uniqueVessels} />
@@ -1066,6 +1274,27 @@ export default function CargoApp({ session }) {
               </div>
               <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); setActiveTab("entry"); }} style={{ padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`, border: "none", color: OFFWHITE, cursor: "pointer" }}>+ New Entry</button>
             </div>
+            {(() => {
+              const expiringEntries = entries.filter(e => {
+                const exp = checkEwayExpiry(e.eway_valid_till);
+                return exp && (exp.state === "expired" || exp.state === "today" || exp.state === "critical");
+              });
+              if (expiringEntries.length === 0) return null;
+              return (
+                <div style={{
+                  background: "#fdecea", border: "1px solid #f5b8b0", borderRadius: "10px",
+                  padding: "12px 14px", marginBottom: "12px", display: "flex", gap: "10px", alignItems: "flex-start",
+                }}>
+                  <span style={{ fontSize: "20px" }}>🚨</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#c0392b" }}>E-Way Bills Need Attention</div>
+                    <div style={{ fontSize: "11px", color: "#c0392b", opacity: 0.8, marginTop: "2px" }}>
+                      {expiringEntries.length} cargo{expiringEntries.length > 1 ? "s have" : " has"} an expired or critical e-way bill. Check containers: {[...new Set(expiringEntries.map(e => e.container_no))].join(", ")}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: MUTED, fontSize: "14px" }}>🔍</span>
@@ -1103,7 +1332,12 @@ export default function CargoApp({ session }) {
                 <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>{search || statusFilter !== "all" || dateFromFilter || dateToFilter ? "No results found" : "No cargo entries yet"}</div>
               </div>
             ) : filteredKeys.map(key => (
-              <ContainerCard key={key} containerNo={key} entries={grouped[key]} meta={containerMeta[key]} onEdit={handleEdit} onDelete={handleDelete} onUpdateStatus={updateContainerStatus} onPrint={setPrintContainer} onExportContainer={exportContainerExcel} />
+              <ContainerCard key={key} containerNo={key} entries={grouped[key]} meta={containerMeta[key]}
+                attachments={attachments} userEmail={userEmail}
+                onEdit={handleEdit} onDelete={handleDelete} onUpdateStatus={updateContainerStatus}
+                onPrint={setPrintContainer} onExportContainer={exportContainerExcel}
+                onDeleteAttachment={deleteAttachment}
+                onUpdateLoadType={updateContainerLoadType} />
             ))}
           </div>
         )}

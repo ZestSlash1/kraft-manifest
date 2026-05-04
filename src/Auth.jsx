@@ -13,6 +13,7 @@ export default function Auth() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -89,8 +90,35 @@ export default function Auth() {
               style={{
                 width: "100%", padding: "10px 14px", borderRadius: "8px",
                 border: `1px solid ${BORDER}`, fontSize: "14px", outline: "none", background: "#fff",
+                color: NAVY, fontFamily: "inherit",
               }}
             />
+          </div>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
+              Password
+            </label>
+            <div style={{ position: "relative" }}>
+              <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required
+                placeholder={mode === "signup" ? "Min 6 characters" : "Your password"}
+                minLength={6}
+                style={{
+                  width: "100%", padding: "10px 44px 10px 14px", borderRadius: "8px",
+                  border: `1px solid ${BORDER}`, fontSize: "14px", outline: "none", background: "#fff",
+                  color: NAVY, fontFamily: "inherit", boxSizing: "border-box",
+                }}
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)",
+                  background: "transparent", border: "none", cursor: "pointer",
+                  padding: "6px 8px", fontSize: "16px", color: MUTED, lineHeight: 1,
+                }}
+                aria-label={showPassword ? "Hide password" : "Show password"}>
+                {showPassword ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
 
           <div style={{ marginBottom: "20px" }}>
