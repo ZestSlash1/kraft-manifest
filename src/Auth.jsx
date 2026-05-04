@@ -14,6 +14,7 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,7 +22,16 @@ export default function Auth() {
     setMessage(null);
 
     try {
-      if (mode === "login") {
+      if (resetMode) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+        if (error) throw error;
+        setMessage({
+          type: "success",
+          text: "Password reset link sent! Check your email and click the link to set a new password.",
+        });
+      } else if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
@@ -95,31 +105,52 @@ export default function Auth() {
             />
           </div>
 
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
-              Password
-            </label>
-            <div style={{ position: "relative" }}>
-              <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required
-                placeholder={mode === "signup" ? "Min 6 characters" : "Your password"}
-                minLength={6}
-                style={{
-                  width: "100%", padding: "10px 44px 10px 14px", borderRadius: "8px",
-                  border: `1px solid ${BORDER}`, fontSize: "14px", outline: "none", background: "#fff",
-                  color: NAVY, fontFamily: "inherit", boxSizing: "border-box",
-                }}
-              />
-              <button type="button" onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)",
-                  background: "transparent", border: "none", cursor: "pointer",
-                  padding: "6px 8px", fontSize: "16px", color: MUTED, lineHeight: 1,
-                }}
-                aria-label={showPassword ? "Hide password" : "Show password"}>
-                {showPassword ? "🙈" : "👁"}
+          {!resetMode && (
+            <div style={{ marginBottom: "12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <label style={{ fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  Password
+                </label>
+                {mode === "login" && (
+                  <button type="button" onClick={() => { setResetMode(true); setMessage(null); }}
+                    style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY2, fontSize: "11px", fontWeight: 600, padding: 0, textDecoration: "underline" }}>
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <div style={{ position: "relative" }}>
+                <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required
+                  placeholder={mode === "signup" ? "Min 6 characters" : "Your password"}
+                  minLength={6}
+                  style={{
+                    width: "100%", padding: "10px 44px 10px 14px", borderRadius: "8px",
+                    border: `1px solid ${BORDER}`, fontSize: "14px", outline: "none", background: "#fff",
+                    color: NAVY, fontFamily: "inherit", boxSizing: "border-box",
+                  }}
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)",
+                    background: "transparent", border: "none", cursor: "pointer",
+                    padding: "6px 8px", fontSize: "16px", color: MUTED, lineHeight: 1,
+                  }}
+                  aria-label={showPassword ? "Hide password" : "Show password"}>
+                  {showPassword ? "🙈" : "👁"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {resetMode && (
+            <div style={{ marginBottom: "12px", padding: "10px 14px", background: "#e8eef8", border: "1px solid #b8c8e0", borderRadius: "8px", fontSize: "12px", color: NAVY2 }}>
+              We'll email you a link to reset your password.
+              <br />
+              <button type="button" onClick={() => { setResetMode(false); setMessage(null); }}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, fontSize: "12px", fontWeight: 700, padding: "6px 0 0", textDecoration: "underline" }}>
+                ← Back to login
               </button>
             </div>
-          </div>
+          )}
 
 
           {message && (
@@ -141,7 +172,7 @@ export default function Auth() {
               fontWeight: 700, fontSize: "14px", cursor: loading ? "not-allowed" : "pointer",
               opacity: loading ? 0.6 : 1, letterSpacing: "0.03em",
             }}>
-            {loading ? "Please wait..." : (mode === "login" ? "🔐 Log In" : "✨ Create Account")}
+            {loading ? "Please wait..." : resetMode ? "📧 Send Reset Link" : (mode === "login" ? "🔐 Log In" : "✨ Create Account")}
           </button>
         </form>
 
