@@ -415,3 +415,14 @@ entrypoint = "./functions/extract-document/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/extract-document/*.html" ]
+
+[functions.admin-user-manager]
+enabled = true
+verify_jwt = true
+import_map = "./functions/admin-user-manager/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/admin-user-manager/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/admin-user-manager/*.html" ]

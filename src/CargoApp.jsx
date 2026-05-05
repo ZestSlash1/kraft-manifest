@@ -230,7 +230,7 @@ const PillSelector = memo(({ label, value, onChange, options }) => (
   </div>
 ));
 
-function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer, onUpdateLoadType, isAdmin }) {
+function ContainerCard({ containerNo, entries, meta, userEmail, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer, onUpdateLoadType, isAdmin }) {
   const [expanded, setExpanded] = useState(true);
   const [statusMenu, setStatusMenu] = useState(false);
   const status = meta?.status || "stuffing";
@@ -843,6 +843,92 @@ function PrintView({ containerNo, entries, meta, onClose }) {
   );
 }
 
+// --- TEAM MANAGEMENT TAB COMPONENT ---
+function TeamTab({ isAdmin, userEmail }) {
+  const [team, setTeam] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { fetchTeam(); }, []);
+
+  const fetchTeam = async () => {
+    setLoading(true);
+    const { data: profiles } = await supabase.from('profiles').select('*');
+    const { data: roles } = await supabase.from('user_roles').select('*');
+    if (profiles && roles) {
+      setTeam(profiles.map(p => ({
+        ...p,
+        role: roles.find(r => r.user_id === p.id)?.role || 'staff'
+      })));
+    }
+    setLoading(false);
+  };
+
+  const handlePasswordReset = async (targetUserId, email) => {
+    const newPassword = prompt(`Enter a new temporary password for ${email}:`);
+    if (!newPassword || newPassword.length < 6) return alert("Password must be at least 6 characters.");
+    try {
+      const { error } = await supabase.functions.invoke('admin-user-manager', {
+        body: { action: 'reset_password', targetUserId, newPassword }
+      });
+      if (error) throw error;
+      alert(`Password successfully updated for ${email}.`);
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleRemoveUser = async (targetUserId, email) => {
+    if (!window.confirm(`Are you sure you want to delete ${email}?`)) return;
+    try {
+      const { error } = await supabase.functions.invoke('admin-user-manager', {
+        body: { action: 'delete_user', targetUserId }
+      });
+      if (error) throw error;
+      setTeam(prev => prev.filter(u => u.id !== targetUserId));
+      alert(`${email} has been removed.`);
+    } catch (err) { alert(err.message); }
+  };
+
+  if (!isAdmin) return <div style={{ padding: "40px", textAlign: "center" }}>🔒 Access Denied</div>;
+
+  return (
+    <div style={{ animation: "fadeUp 0.3s ease" }}>
+      <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>👥 Team Management</h2>
+      <p style={{ fontSize: "12px", color: MUTED, marginBottom: "16px" }}>Admin only: Reset passwords or remove staff access.</p>
+      
+      {loading ? <div style={{ textAlign: "center", padding: "20px" }}>Loading team members...</div> : (
+        <div style={{ ...GLASS_STYLE, borderRadius: "12px", overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+            <thead>
+              <tr style={{ background: NAVY, color: OFFWHITE, textAlign: "left" }}>
+                <th style={{ padding: "12px 16px" }}>Email</th>
+                <th style={{ padding: "12px 16px" }}>Role</th>
+                <th style={{ padding: "12px 16px", textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {team.map((user, i) => (
+                <tr key={user.id} style={{ borderBottom: i < team.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                  <td style={{ padding: "12px 16px", fontWeight: 500 }}>{user.email}</td>
+                  <td style={{ padding: "12px 16px" }}>
+                    <Badge color={user.role === 'admin' ? 'amber' : 'navy'}>{user.role.toUpperCase()}</Badge>
+                  </td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                    {user.email !== userEmail && (
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                        <button onClick={() => handlePasswordReset(user.id, user.email)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "#fff", border: `1px solid ${BORDER}`, color: NAVY, cursor: "pointer" }}>🔑 Reset</button>
+                        <button onClick={() => handleRemoveUser(user.id, user.email)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "rgba(192,57,43,0.1)", border: "1px solid rgba(192,57,43,0.2)", color: "#c0392b", cursor: "pointer" }}>🗑️ Remove</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CargoApp({ session }) {
   const [entries, setEntries] = useState([]);
   const [containerMeta, setContainerMeta] = useState({});
@@ -1257,13 +1343,13 @@ export default function CargoApp({ session }) {
       {/* --- STICKY NAV WRAPPER --- */}
       <div style={{ position: "sticky", top: 0, zIndex: 100 }}>
         
-        {/* 1. The Header (Now respects the notch) */}
+        {/* 1. The Header */}
         <div style={{
           ...DARK_GLASS_STYLE,
           padding: "calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px 16px", 
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          position: "relative", // Forces a new stacking context
-          zIndex: 50,           // Puts the entire header strictly above the tabs
+          position: "relative",
+          zIndex: 50,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
             <img src="/kraft-logo.png" alt="Kraft" style={{ width: "42px", height: "42px", objectFit: "contain", flexShrink: 0 }} />
@@ -1337,7 +1423,7 @@ export default function CargoApp({ session }) {
             ["vessel", "🚢 Vessels"], 
             ["activity", "📜 Activity"], 
             ["dashboard", "📊 Dashboard"]
-          ].map(([tab, label]) => (
+          ].concat(isAdmin ? [["team", "👥 Team"]] : []).map(([tab, label]) => (
             <button key={tab} onClick={() => { setActiveTab(tab); if (tab === "entry" && !editId) { setForm(initialForm); setErrors({}); } }}
               style={{
                 padding: "12px 4px", 
@@ -1549,6 +1635,8 @@ export default function CargoApp({ session }) {
             <Dashboard entries={entries} containerMeta={containerMeta} />
           </div>
         )}
+
+        {activeTab === "team" && isAdmin && <TeamTab isAdmin={isAdmin} userEmail={userEmail} />}
       </div>
 
       {pushPrompt && (
