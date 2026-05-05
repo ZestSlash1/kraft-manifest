@@ -1257,11 +1257,13 @@ export default function CargoApp({ session }) {
       {/* --- STICKY NAV WRAPPER --- */}
       <div style={{ position: "sticky", top: 0, zIndex: 100 }}>
         
-        {/* 1. The Header */}
+        {/* 1. The Header (Now respects the notch) */}
         <div style={{
           ...DARK_GLASS_STYLE,
           padding: "calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px 16px", 
           display: "flex", alignItems: "center", justifyContent: "space-between",
+          position: "relative", // Forces a new stacking context
+          zIndex: 50,           // Puts the entire header strictly above the tabs
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
             <img src="/kraft-logo.png" alt="Kraft" style={{ width: "42px", height: "42px", objectFit: "contain", flexShrink: 0 }} />
