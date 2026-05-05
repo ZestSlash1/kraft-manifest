@@ -1265,17 +1265,50 @@ export default function CargoApp({ session }) {
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
-            <img src="/kraft-logo.png" alt="Kraft" style={{ width: "40px", height: "40px", objectFit: "contain", flexShrink: 0 }} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: OFFWHITE }}>Cargo Manifest</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
-                <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.9)", fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {/* Logo */}
+            <img src="/kraft-logo.png" alt="Kraft" style={{ width: "42px", height: "42px", objectFit: "contain", flexShrink: 0 }} />
+            
+            {/* Text Container - Strictly Left Aligned */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: OFFWHITE, letterSpacing: "0.02em", lineHeight: "1.2" }}>
+                Cargo Manifest
+              </div>
+              
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.85)", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {fullName}
                 </div>
+                
+                {/* Frosted Glass Badges */}
                 {isAdmin ? (
-                  <span style={{ background: "linear-gradient(135deg, #f59e3c 0%, #d87c1e 100%)", color: "#fff", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", boxShadow: "0 2px 8px rgba(245, 158, 60, 0.4)", border: "1px solid rgba(255,255,255,0.2)" }}>Admin</span>
+                  <span style={{ 
+                    background: "rgba(245, 158, 60, 0.15)", 
+                    backdropFilter: "blur(8px)", 
+                    WebkitBackdropFilter: "blur(8px)", 
+                    color: "#f59e3c", 
+                    padding: "3px 8px", 
+                    borderRadius: "6px", 
+                    fontSize: "9px", 
+                    fontWeight: 800, 
+                    letterSpacing: "0.1em", 
+                    textTransform: "uppercase", 
+                    border: "1px solid rgba(245, 158, 60, 0.4)", 
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.1)" 
+                  }}>Admin</span>
                 ) : (
-                  <span style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.7)", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.15)" }}>Staff</span>
+                  <span style={{ 
+                    background: "rgba(255,255,255,0.1)", 
+                    backdropFilter: "blur(8px)", 
+                    WebkitBackdropFilter: "blur(8px)", 
+                    color: "rgba(255,255,255,0.8)", 
+                    padding: "3px 8px", 
+                    borderRadius: "6px", 
+                    fontSize: "9px", 
+                    fontWeight: 700, 
+                    letterSpacing: "0.1em", 
+                    textTransform: "uppercase", 
+                    border: "1px solid rgba(255,255,255,0.2)" 
+                  }}>Staff</span>
                 )}
               </div>
             </div>
