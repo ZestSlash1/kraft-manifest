@@ -1255,91 +1255,70 @@ export default function CargoApp({ session }) {
         @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
 
-      <div style={{
-        ...DARK_GLASS_STYLE,
-        padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
-        height: "64px", position: "sticky", top: 0, zIndex: 100,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
-          <img src="/kraft-logo.png" alt="Kraft" style={{ width: "40px", height: "40px", objectFit: "contain", flexShrink: 0 }} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: OFFWHITE }}>Cargo Manifest</div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
-              <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.9)", fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {fullName}
+      {/* --- STICKY NAV WRAPPER --- */}
+      <div style={{ position: "sticky", top: 0, zIndex: 100 }}>
+        
+        {/* 1. The Header (Now respects the notch) */}
+        <div style={{
+          ...DARK_GLASS_STYLE,
+          padding: "calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px 16px", 
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
+            <img src="/kraft-logo.png" alt="Kraft" style={{ width: "40px", height: "40px", objectFit: "contain", flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: OFFWHITE }}>Cargo Manifest</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
+                <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.9)", fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {fullName}
+                </div>
+                {isAdmin ? (
+                  <span style={{ background: "linear-gradient(135deg, #f59e3c 0%, #d87c1e 100%)", color: "#fff", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", boxShadow: "0 2px 8px rgba(245, 158, 60, 0.4)", border: "1px solid rgba(255,255,255,0.2)" }}>Admin</span>
+                ) : (
+                  <span style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.7)", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.15)" }}>Staff</span>
+                )}
               </div>
-              {isAdmin ? (
-                <span style={{
-                  background: "linear-gradient(135deg, #f59e3c 0%, #d87c1e 100%)",
-                  color: "#fff",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  fontSize: "9px",
-                  fontWeight: 800,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  boxShadow: "0 2px 8px rgba(245, 158, 60, 0.4)",
-                  border: "1px solid rgba(255,255,255,0.2)"
-                }}>Admin</span>
-              ) : (
-                <span style={{
-                  background: "rgba(255,255,255,0.1)",
-                  color: "rgba(255,255,255,0.7)",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  fontSize: "9px",
-                  fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  border: "1px solid rgba(255,255,255,0.15)"
-                }}>Staff</span>
-              )}
             </div>
           </div>
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <button onClick={() => setShowMenu(!showMenu)} style={{ padding: "8px 12px", borderRadius: "8px", fontSize: "18px", cursor: "pointer", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: OFFWHITE, fontWeight: 700 }}>⋮</button>
+            {showMenu && (
+              <div style={{ position: "absolute", right: 0, top: "100%", marginTop: "8px", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", boxShadow: "0 4px 20px rgba(13,30,60,0.2)", zIndex: 200, minWidth: "240px", overflow: "hidden" }}>
+                <button onClick={() => { exportAllExcel(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left" }}>📊 Export All to Excel</button>
+                {!pushEnabled && <button onClick={() => { enablePush(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🔔 Enable Push Notifications</button>}
+                {pushEnabled && <div style={{ padding: "12px 14px", fontSize: "12px", color: "#15803d", borderTop: `1px solid ${BORDER}`, fontWeight: 600 }}>🔔 Notifications: ON</div>}
+                <button onClick={() => { handleLogout(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: "#c0392b", fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🚪 Log Out</button>
+              </div>
+            )}
+          </div>
         </div>
-        <div style={{ position: "relative", flexShrink: 0 }}>
-          <button onClick={() => setShowMenu(!showMenu)} style={{ padding: "8px 12px", borderRadius: "8px", fontSize: "18px", cursor: "pointer", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: OFFWHITE, fontWeight: 700 }}>⋮</button>
-          {showMenu && (
-            <div style={{ position: "absolute", right: 0, top: "100%", marginTop: "8px", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", boxShadow: "0 4px 20px rgba(13,30,60,0.2)", zIndex: 200, minWidth: "240px", overflow: "hidden" }}>
-              <button onClick={() => { exportAllExcel(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left" }}>📊 Export All to Excel</button>
-              {!pushEnabled && <button onClick={() => { enablePush(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🔔 Enable Push Notifications</button>}
-              {pushEnabled && <div style={{ padding: "12px 14px", fontSize: "12px", color: "#15803d", borderTop: `1px solid ${BORDER}`, fontWeight: 600 }}>🔔 Notifications: ON</div>}
-              <button onClick={() => { handleLogout(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: "#c0392b", fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🚪 Log Out</button>
-            </div>
-          )}
-        </div>
-      </div>
 
-      <div style={{ 
-        ...GLASS_STYLE,
-        borderRadius: "0 0 16px 16px",
-        margin: "0 16px",
-        display: "flex", gap: "16px", padding: "8px 20px 0", position: "sticky", top: "64px", zIndex: 90, overflowX: "auto" 
-      }}>
-        {[
-          ["entry", "📋 New Entry"], 
-          ["log", `📦 Manifest (${Object.keys(grouped).length})`], 
-          ["vessel", "🚢 Vessels"], 
-          ["activity", "📜 Activity"], 
-          ["dashboard", "📊 Dashboard"]
-        ].map(([tab, label]) => (
-          <button key={tab} onClick={() => { setActiveTab(tab); if (tab === "entry" && !editId) { setForm(initialForm); setErrors({}); } }}
-            style={{
-              padding: "12px 4px", 
-              fontSize: "13px", 
-              fontWeight: 700, 
-              cursor: "pointer",
-              background: "transparent",
-              border: "none",
-              borderBottom: activeTab === tab ? "3px solid #f59e3c" : "3px solid transparent",
-              color: activeTab === tab ? NAVY : MUTED,
-              whiteSpace: "nowrap",
-              transition: "all 0.2s ease-in-out",
-              opacity: activeTab === tab ? 1 : 0.6,
-              marginBottom: "-1px"
-            }}>{label}</button>
-        ))}
+        {/* 2. The Tabs (Now flow naturally under the header) */}
+        <div style={{ 
+          ...GLASS_STYLE,
+          borderRadius: "0 0 16px 16px",
+          margin: "0 16px",
+          display: "flex", gap: "16px", padding: "8px 20px 0", overflowX: "auto" 
+        }}>
+          {[
+            ["entry", "📋 New Entry"], 
+            ["log", `📦 Manifest (${Object.keys(grouped).length})`], 
+            ["vessel", "🚢 Vessels"], 
+            ["activity", "📜 Activity"], 
+            ["dashboard", "📊 Dashboard"]
+          ].map(([tab, label]) => (
+            <button key={tab} onClick={() => { setActiveTab(tab); if (tab === "entry" && !editId) { setForm(initialForm); setErrors({}); } }}
+              style={{
+                padding: "12px 4px", fontSize: "13px", fontWeight: 700, cursor: "pointer", background: "transparent", border: "none",
+                borderBottom: activeTab === tab ? "3px solid #f59e3c" : "3px solid transparent",
+                color: activeTab === tab ? NAVY : MUTED, whiteSpace: "nowrap", transition: "all 0.2s ease-in-out",
+                opacity: activeTab === tab ? 1 : 0.6, marginBottom: "-1px"
+              }}>{label}</button>
+          ))}
+        </div>
+
       </div>
+      {/* --- END STICKY NAV WRAPPER --- */}
 
       <div style={{ maxWidth: "800px", margin: "0 auto", padding: "20px 16px" }}>
 
