@@ -30,10 +30,26 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", background: "#f0edf0" }}>
+      <div style={{ minHeight: "100vh", background: "#f0edf0", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", fontFamily: "sans-serif" }}>
+        
+        {/* Hidden SVG Filter required for the gooey melt effect */}
+        <svg style={{ position: "absolute", width: 0, height: 0 }}>
+          <defs>
+            <filter id="gooey-filter">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
+              <feBlend in="SourceGraphic" in2="goo" />
+            </filter>
+          </defs>
+        </svg>
+
         <div style={{ textAlign: "center" }}>
-          <img src="/kraft-logo.png" alt="Kraft" style={{ width: "56px", height: "56px", marginBottom: "12px", objectFit: "contain" }} />
-          <div style={{ color: "#5a6a7a" }}>Loading...</div>
+          <div className="goo-container">
+            <div className="goo-blob blob-1"></div>
+            <div className="goo-blob blob-2"></div>
+            <div className="goo-blob blob-3"></div>
+          </div>
+          <div style={{ color: "#5a6a7a", fontSize: "14px", fontWeight: 600, letterSpacing: "0.05em" }}></div>
         </div>
       </div>
     );

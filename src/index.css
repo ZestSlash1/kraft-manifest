@@ -109,3 +109,56 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* --- Gooey Loader Styles --- */
+.goo-container {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  filter: url(#gooey-filter);
+  margin: 0 auto 20px;
+}
+
+.goo-blob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Light Blue */
+.blob-1 { 
+  background: linear-gradient(135deg, #00d2ff, #3a7bd5); 
+  animation: orbit1 3s infinite ease-in-out; 
+}
+/* Purple */
+.blob-2 { 
+  background: linear-gradient(135deg, #b224ef, #7579ff); 
+  animation: orbit2 3s infinite ease-in-out; 
+}
+/* Green */
+.blob-3 { 
+  background: linear-gradient(135deg, #11998e, #38ef7d); 
+  animation: orbit3 3s infinite ease-in-out; 
+}
+
+@keyframes orbit1 {
+  0%, 100% { transform: translate(-50%, -50%) translate(0, -35px) scale(1.2); }
+  33% { transform: translate(-50%, -50%) translate(30px, 18px) scale(0.8); }
+  66% { transform: translate(-50%, -50%) translate(-30px, 18px) scale(1); }
+}
+
+@keyframes orbit2 {
+  0%, 100% { transform: translate(-50%, -50%) translate(30px, 18px) scale(1); }
+  33% { transform: translate(-50%, -50%) translate(-30px, 18px) scale(1.2); }
+  66% { transform: translate(-50%, -50%) translate(0, -35px) scale(0.8); }
+}
+
+@keyframes orbit3 {
+  0%, 100% { transform: translate(-50%, -50%) translate(-30px, 18px) scale(0.8); }
+  33% { transform: translate(-50%, -50%) translate(0, -35px) scale(1); }
+  66% { transform: translate(-50%, -50%) translate(30px, 18px) scale(1.2); }
+}

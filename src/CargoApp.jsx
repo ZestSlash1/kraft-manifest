@@ -12,6 +12,23 @@ const BORDER = "#d0cad8";
 const MUTED = "#5a6a7a";
 const TEXT = "#0d1e3c";
 
+// --- Glassmorphism Styles ---
+const GLASS_STYLE = {
+  background: "rgba(255, 255, 255, 0.65)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  border: "1px solid rgba(255, 255, 255, 0.6)",
+  boxShadow: "0 8px 32px rgba(13, 30, 60, 0.05)",
+};
+
+const DARK_GLASS_STYLE = {
+  background: "rgba(13, 30, 60, 0.75)",
+  backdropFilter: "blur(20px)",
+  WebkitBackdropFilter: "blur(20px)",
+  borderBottom: "3px solid #f59e3c",
+  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+};
+
 const STATUSES = [
   { id: "stuffing", label: "Stuffing", color: "#a85c00", bg: "#fef3e0", border: "#f5d090", icon: "📦" },
   { id: "loaded", label: "Loaded", color: "#1e40af", bg: "#e0e8f7", border: "#a8b8e0", icon: "🏗️" },
@@ -139,10 +156,10 @@ async function sendPushNotification(title, body, excludeUserId) {
 
 function Badge({ children, color = "navy" }) {
   const colors = {
-    navy: { bg: "#e8eef8", text: NAVY, border: "#b8c8e0" },
-    amber: { bg: "#fef3e0", text: "#7a4f00", border: "#f5d090" },
-    green: { bg: "#e6f7ed", text: "#1a5c32", border: "#9eddb8" },
-    slate: { bg: "#f0edf0", text: MUTED, border: BORDER },
+    navy: { bg: "rgba(13,30,60,0.1)", text: NAVY, border: "rgba(13,30,60,0.2)" },
+    amber: { bg: "rgba(168,92,0,0.1)", text: "#7a4f00", border: "rgba(168,92,0,0.2)" },
+    green: { bg: "rgba(21,128,61,0.1)", text: "#1a5c32", border: "rgba(21,128,61,0.2)" },
+    slate: { bg: "rgba(90,106,122,0.1)", text: MUTED, border: "rgba(90,106,122,0.2)" },
   };
   const c = colors[color];
   return (
@@ -178,14 +195,15 @@ const Field = memo(({ label, field, placeholder, required, half, value, error, o
     <input type={type} list={listId} value={value || ""} onChange={e => onChange(field, e.target.value)} placeholder={placeholder}
       style={{
         width: "100%", padding: "10px 14px", borderRadius: "8px",
-        background: error ? "#fef8f8" : "#fff",
-        border: `1px solid ${error ? "#e74c3c" : BORDER}`,
+        background: error ? "rgba(231,76,60,0.1)" : "rgba(255,255,255,0.7)",
+        border: `1px solid ${error ? "#e74c3c" : "rgba(255,255,255,0.8)"}`,
         color: TEXT, fontSize: "14px", outline: "none", boxSizing: "border-box",
         fontFamily: monoFields.has(field) ? "'DM Mono', monospace" : "inherit",
-        transition: "border-color 0.2s",
+        transition: "all 0.2s",
+        backdropFilter: "blur(4px)"
       }}
-      onFocus={e => e.target.style.borderColor = NAVY}
-      onBlur={e => e.target.style.borderColor = error ? "#e74c3c" : BORDER}
+      onFocus={e => { e.target.style.borderColor = NAVY; e.target.style.background = "#fff"; }}
+      onBlur={e => { e.target.style.borderColor = error ? "#e74c3c" : "rgba(255,255,255,0.8)"; e.target.style.background = error ? "rgba(231,76,60,0.1)" : "rgba(255,255,255,0.7)"; }}
     />
     {listId && list && <datalist id={listId}>{list.map(opt => <option key={opt} value={opt} />)}</datalist>}
     {error && <div style={{ fontSize: "11px", color: "#c0392b", marginTop: "4px" }}>{error}</div>}
@@ -202,10 +220,10 @@ const PillSelector = memo(({ label, value, onChange, options }) => (
         <button key={opt.value} type="button" onClick={() => onChange(opt.value === value ? "" : opt.value)}
           style={{
             flex: 1, padding: "9px 4px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
-            background: value === opt.value ? (opt.color || NAVY) : "#fff",
+            background: value === opt.value ? (opt.color || NAVY) : "rgba(255,255,255,0.7)",
             color: value === opt.value ? "#fff" : NAVY,
-            border: `1px solid ${value === opt.value ? (opt.color || NAVY) : BORDER}`,
-            cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+            border: `1px solid ${value === opt.value ? (opt.color || NAVY) : "rgba(255,255,255,0.8)"}`,
+            cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", transition: "all 0.2s"
           }}>{opt.label}</button>
       ))}
     </div>
@@ -220,13 +238,11 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
 
   return (
     <div style={{ 
-      background: "#fff", 
-      border: `1px solid ${BORDER}`, 
+      ...GLASS_STYLE,
       borderLeft: `5px solid ${getStatusInfo(status).color}`, 
       borderRadius: "12px", 
       overflow: "hidden", 
       marginBottom: "16px", 
-      boxShadow: "0 6px 16px rgba(13,30,60,0.05)"
     }}>
       <div onClick={() => setExpanded(!expanded)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`, cursor: "pointer", userSelect: "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
@@ -246,7 +262,7 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
       </div>
 
       {expanded && (
-        <div style={{ padding: "14px 16px", background: OFFWHITE }}>
+        <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.3)" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px", alignItems: "center" }}>
             <div style={{ position: "relative" }}>
               <button onClick={(e) => { e.stopPropagation(); setStatusMenu(!statusMenu); }} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
@@ -264,19 +280,19 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
             <select value={meta?.load_type_override || "auto"}
               onChange={(e) => { e.stopPropagation(); onUpdateLoadType(containerNo, e.target.value); }}
               onClick={(e) => e.stopPropagation()}
-              style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 8px", fontSize: "11px", fontWeight: 600, fontFamily: "'DM Mono', monospace", cursor: "pointer" }}>
+              style={{ background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.8)`, borderRadius: "6px", color: NAVY, padding: "5px 8px", fontSize: "11px", fontWeight: 600, fontFamily: "'DM Mono', monospace", cursor: "pointer" }}>
               <option value="auto">AUTO ({getContainerLoadType(entries, meta)})</option>
               <option value="FCL">FCL</option>
               <option value="LCL">LCL</option>
             </select>
             <div style={{ flex: 1 }} />
-            <button onClick={(e) => { e.stopPropagation(); onExportContainer(containerNo); }} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>📊 Excel</button>
-            <button onClick={(e) => { e.stopPropagation(); onPrint(containerNo); }} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>🖨 Print</button>
+            <button onClick={(e) => { e.stopPropagation(); onExportContainer(containerNo); }} style={{ background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.8)`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>📊 Excel</button>
+            <button onClick={(e) => { e.stopPropagation(); onPrint(containerNo); }} style={{ background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.8)`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>🖨 Print</button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {entries.map((entry, idx) => (
-              <div key={entry.id} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px" }}>
+              <div key={entry.id} style={{ background: "rgba(255,255,255,0.6)", border: `1px solid rgba(255,255,255,0.8)`, borderRadius: "8px", padding: "14px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", color: MUTED }}>#{String(idx + 1).padStart(2, "0")}</span>
@@ -285,9 +301,9 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
                     {entry.created_by_email && <Badge color="slate">👤 {entry.created_by_email.split("@")[0]}</Badge>}
                   </div>
                   <div style={{ display: "flex", gap: "6px" }}>
-                    <button onClick={() => onEdit(entry)} style={{ background: "#e8eef8", border: "1px solid #b8c8e0", borderRadius: "6px", color: NAVY, padding: "4px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Edit</button>
+                    <button onClick={() => onEdit(entry)} style={{ background: "rgba(13,30,60,0.05)", border: "1px solid rgba(13,30,60,0.1)", borderRadius: "6px", color: NAVY, padding: "4px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Edit</button>
                     {isAdmin && (
-                      <button onClick={() => onDelete(entry.id)} style={{ background: "#fdecea", border: "1px solid #f5b8b0", borderRadius: "6px", color: "#c0392b", padding: "4px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+                      <button onClick={() => onDelete(entry.id)} style={{ background: "rgba(192,57,43,0.05)", border: "1px solid rgba(192,57,43,0.2)", borderRadius: "6px", color: "#c0392b", padding: "4px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Delete</button>
                     )}
                   </div>
                 </div>
@@ -324,10 +340,10 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
                   const expiry = checkEwayExpiry(entry.eway_valid_till);
                   if (!expiry) return null;
                   const colors = {
-                    expired: { bg: "#fdecea", border: "#f5b8b0", color: "#c0392b", icon: "🚨" },
-                    today: { bg: "#fdecea", border: "#f5b8b0", color: "#c0392b", icon: "🚨" },
-                    critical: { bg: "#fef3e0", border: "#f5d090", color: "#a85c00", icon: "⚠️" },
-                    warning: { bg: "#fef3e0", border: "#f5d090", color: "#a85c00", icon: "⏰" },
+                    expired: { bg: "rgba(192,57,43,0.1)", border: "rgba(192,57,43,0.2)", color: "#c0392b", icon: "🚨" },
+                    today: { bg: "rgba(192,57,43,0.1)", border: "rgba(192,57,43,0.2)", color: "#c0392b", icon: "🚨" },
+                    critical: { bg: "rgba(168,92,0,0.1)", border: "rgba(168,92,0,0.2)", color: "#a85c00", icon: "⚠️" },
+                    warning: { bg: "rgba(168,92,0,0.1)", border: "rgba(168,92,0,0.2)", color: "#a85c00", icon: "⏰" },
                   };
                   const c = colors[expiry.state];
                   return (
@@ -342,12 +358,12 @@ function ContainerCard({ containerNo, entries, meta, attachments, userEmail, onE
                 })()}
 
                 {entry.remarks && (
-                  <div style={{ marginTop: "8px", padding: "8px 10px", background: "#fef9e7", border: "1px solid #f5e090", borderRadius: "6px" }}>
-                    <div style={{ fontSize: "10px", color: "#7a5500", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "2px" }}>📝 Remarks</div>
-                    <div style={{ fontSize: "12px", color: "#5a4400" }}>{entry.remarks}</div>
+                  <div style={{ marginTop: "8px", padding: "8px 10px", background: "rgba(245,158,60,0.1)", border: "1px solid rgba(245,158,60,0.3)", borderRadius: "6px" }}>
+                    <div style={{ fontSize: "10px", color: "#a85c00", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "2px" }}>📝 Remarks</div>
+                    <div style={{ fontSize: "12px", color: "#7a4f00" }}>{entry.remarks}</div>
                   </div>
                 )}
-                <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: `1px solid ${BORDER}`, fontSize: "10px", color: MUTED }}>
+                <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: `1px solid rgba(0,0,0,0.05)`, fontSize: "10px", color: MUTED }}>
                   Logged: {new Date(entry.created_at).toLocaleString("en-IN")}
                 </div>
               </div>
@@ -387,7 +403,7 @@ function Dashboard({ entries, containerMeta }) {
 
   if (entries.length === 0) {
     return (
-      <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
+      <div style={{ textAlign: "center", padding: "60px 20px", ...GLASS_STYLE, borderRadius: "14px" }}>
         <div style={{ fontSize: "40px", marginBottom: "12px" }}>📊</div>
         <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No data to display</div>
       </div>
@@ -395,7 +411,7 @@ function Dashboard({ entries, containerMeta }) {
   }
 
   const statCard = (label, value) => (
-    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
+    <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
       <div style={{ fontSize: "11px", color: MUTED, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "4px" }}>{label}</div>
       <div style={{ fontSize: "28px", fontWeight: 700, color: NAVY, fontFamily: "'DM Mono', monospace" }}>{value}</div>
     </div>
@@ -407,12 +423,12 @@ function Dashboard({ entries, containerMeta }) {
         {statCard("Containers", stats.totalContainers)}
         {statCard("Total Cargos", stats.totalCargos)}
       </div>
-      <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+      <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
         <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>📦 Containers by Status</div>
         {stats.statusCounts.map(s => (
           <div key={s.name} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
             <div style={{ width: "90px", fontSize: "12px", color: MUTED, fontWeight: 600 }}>{s.name}</div>
-            <div style={{ flex: 1, height: "20px", background: "#f0edf0", borderRadius: "4px", overflow: "hidden" }}>
+            <div style={{ flex: 1, height: "20px", background: "rgba(0,0,0,0.05)", borderRadius: "4px", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${(s.value / Math.max(stats.totalContainers, 1)) * 100}%`, background: s.color, transition: "width 0.3s" }} />
             </div>
             <div style={{ width: "30px", textAlign: "right", fontSize: "13px", fontWeight: 700, color: NAVY, fontFamily: "'DM Mono', monospace" }}>{s.value}</div>
@@ -420,23 +436,23 @@ function Dashboard({ entries, containerMeta }) {
         ))}
       </div>
       {stats.monthlyData.length > 1 && (
-        <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+        <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
           <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>📅 Cargos Per Month</div>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={stats.monthlyData} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e0d8e0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
               <XAxis dataKey="month" stroke={MUTED} style={{ fontSize: "11px" }} />
               <YAxis stroke={MUTED} style={{ fontSize: "11px" }} />
-              <Tooltip contentStyle={{ borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "12px" }} />
+              <Tooltip contentStyle={{ borderRadius: "8px", background: "rgba(255,255,255,0.8)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.9)", fontSize: "12px" }} />
               <Line type="monotone" dataKey="count" stroke={NAVY} strokeWidth={2} dot={{ fill: NAVY, r: 4 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       )}
-      <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+      <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
         <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>🏢 Top Shippers</div>
         {stats.topShippers.map((s, i) => (
-          <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: i < stats.topShippers.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+          <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: i < stats.topShippers.length - 1 ? `1px solid rgba(0,0,0,0.05)` : "none" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
               <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", color: MUTED, minWidth: "20px" }}>#{i + 1}</span>
               <span style={{ fontSize: "13px", color: TEXT, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
@@ -445,10 +461,10 @@ function Dashboard({ entries, containerMeta }) {
           </div>
         ))}
       </div>
-      <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px" }}>
+      <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px" }}>
         <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>🎯 Top Consignees</div>
         {stats.topConsignees.map((s, i) => (
-          <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: i < stats.topConsignees.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+          <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: i < stats.topConsignees.length - 1 ? `1px solid rgba(0,0,0,0.05)` : "none" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
               <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", color: MUTED, minWidth: "20px" }}>#{i + 1}</span>
               <span style={{ fontSize: "13px", color: TEXT, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
@@ -464,7 +480,7 @@ function Dashboard({ entries, containerMeta }) {
 function ActivityTab({ activities }) {
   if (activities.length === 0) {
     return (
-      <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
+      <div style={{ textAlign: "center", padding: "60px 20px", ...GLASS_STYLE, borderRadius: "14px" }}>
         <div style={{ fontSize: "40px", marginBottom: "12px" }}>📜</div>
         <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No activity yet</div>
       </div>
@@ -478,12 +494,12 @@ function ActivityTab({ activities }) {
     vessel_movement: { icon: "🚢", color: "#6b21a8", label: "Vessel Movement" },
   };
   return (
-    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "8px" }}>
+    <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "8px" }}>
       {activities.map((a, i) => {
         const info = actionIcons[a.action] || { icon: "📝", color: MUTED, label: a.action };
         const userName = a.user_email ? a.user_email.split("@")[0] : "Someone";
         return (
-          <div key={a.id} style={{ padding: "12px", borderBottom: i < activities.length - 1 ? `1px solid ${BORDER}` : "none", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+          <div key={a.id} style={{ padding: "12px", borderBottom: i < activities.length - 1 ? `1px solid rgba(0,0,0,0.05)` : "none", display: "flex", alignItems: "flex-start", gap: "10px" }}>
             <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: `${info.color}15`, color: info.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>{info.icon}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: "13px", color: TEXT, fontWeight: 500 }}>
@@ -554,7 +570,7 @@ function VesselGlobe({ vesselMovements }) {
   }, [latestMovements]);
 
   return (
-    <div ref={containerRef} style={{ height: "400px", width: "100%", borderRadius: "12px", overflow: "hidden", border: "1px solid #d0cad8", marginBottom: "16px", backgroundColor: "#0d1e3c" }}>
+    <div ref={containerRef} style={{ height: "400px", width: "100%", borderRadius: "12px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.6)", boxShadow: "0 8px 32px rgba(13, 30, 60, 0.15)", marginBottom: "16px", backgroundColor: "#0d1e3c" }}>
       {dimensions.width > 0 && (
         <Globe
           ref={globeEl}
@@ -646,8 +662,8 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
         </div>
         <button onClick={() => setShowForm(!showForm)} style={{
           padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-          background: showForm ? "#fff" : `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`,
-          border: showForm ? `1px solid ${BORDER}` : "none",
+          background: showForm ? "rgba(255,255,255,0.8)" : `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`,
+          border: "1px solid rgba(255,255,255,0.6)",
           color: showForm ? NAVY : OFFWHITE, cursor: "pointer",
         }}>{showForm ? "✕ Cancel" : "+ Add Movement"}</button>
       </div>
@@ -655,18 +671,18 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
       <VesselGlobe vesselMovements={vesselMovements} />
 
       {showForm && (
-        <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+        <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <div>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Vessel Name *</label>
               <input list="vessels-list-mov" value={form.vessel_name} onChange={e => setForm({ ...form, vessel_name: e.target.value })} placeholder="e.g. MV APJ Karan 2"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)" }} />
               <datalist id="vessels-list-mov">{uniqueVessels.map(v => <option key={v} value={v} />)}</datalist>
             </div>
             <div>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Voyage No.</label>
               <input value={form.voyage_number} onChange={e => setForm({ ...form, voyage_number: e.target.value })} placeholder="e.g. 024"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", fontFamily: "'DM Mono', monospace", background: "#fff" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", fontFamily: "'DM Mono', monospace", background: "rgba(255,255,255,0.7)" }} />
             </div>
             <div style={{ gridColumn: "span 2" }}>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Event Type *</label>
@@ -674,9 +690,9 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
                 {VESSEL_EVENTS.map(ev => (
                   <button key={ev.id} onClick={() => setForm({ ...form, event_type: ev.id })} style={{
                     padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600,
-                    background: form.event_type === ev.id ? ev.color : "#fff",
+                    background: form.event_type === ev.id ? ev.color : "rgba(255,255,255,0.7)",
                     color: form.event_type === ev.id ? "#fff" : ev.color,
-                    border: `1px solid ${form.event_type === ev.id ? ev.color : BORDER}`, cursor: "pointer",
+                    border: `1px solid ${form.event_type === ev.id ? ev.color : "rgba(255,255,255,0.8)"}`, cursor: "pointer", transition: "all 0.2s"
                   }}>{ev.icon} {ev.label}</button>
                 ))}
               </div>
@@ -684,27 +700,27 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
             <div>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Date & Time *</label>
               <input type="datetime-local" value={form.event_date} onChange={e => setForm({ ...form, event_date: e.target.value })}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)" }} />
             </div>
             <div>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Location Name</label>
               <input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. Kolkata Port"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)" }} />
             </div>
             
             <div style={{ gridColumn: "span 2", display: "flex", gap: "12px", alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Latitude</label>
                 <input type="number" step="any" value={form.latitude} onChange={e => setForm({ ...form, latitude: e.target.value })} placeholder="e.g. 22.57"
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff", fontFamily: "'DM Mono', monospace" }} />
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)", fontFamily: "'DM Mono', monospace" }} />
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Longitude</label>
                 <input type="number" step="any" value={form.longitude} onChange={e => setForm({ ...form, longitude: e.target.value })} placeholder="e.g. 88.36"
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", background: "#fff", fontFamily: "'DM Mono', monospace" }} />
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)", fontFamily: "'DM Mono', monospace" }} />
               </div>
               <button onClick={fetchLiveLocation} disabled={fetchingLocation} type="button" style={{
-                height: "37px", padding: "0 16px", borderRadius: "8px", background: "#e8eef8", color: NAVY, border: "1px solid #b8c8e0", fontWeight: 600, fontSize: "12px", cursor: fetchingLocation ? "not-allowed" : "pointer", whiteSpace: "nowrap"
+                height: "37px", padding: "0 16px", borderRadius: "8px", background: "rgba(255,255,255,0.8)", color: NAVY, border: "1px solid rgba(255,255,255,0.9)", fontWeight: 600, fontSize: "12px", cursor: fetchingLocation ? "not-allowed" : "pointer", whiteSpace: "nowrap"
               }}>
                 {fetchingLocation ? "⏳ Searching..." : "📍 Get Coordinates from Location"}
               </button>
@@ -713,7 +729,7 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
             <div style={{ gridColumn: "span 2" }}>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Notes</label>
               <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Optional details..." rows={2}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${BORDER}`, fontSize: "13px", fontFamily: "inherit", resize: "vertical", background: "#fff" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", fontFamily: "inherit", resize: "vertical", background: "rgba(255,255,255,0.7)" }} />
             </div>
           </div>
           <button onClick={handleSubmit} disabled={submitting || !form.vessel_name.trim() || !form.event_date}
@@ -724,12 +740,12 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
       )}
 
       {grouped.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
+        <div style={{ textAlign: "center", padding: "60px 20px", ...GLASS_STYLE, borderRadius: "14px" }}>
           <div style={{ fontSize: "40px", marginBottom: "12px" }}>🚢</div>
           <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No vessel movements logged</div>
         </div>
       ) : grouped.map(v => (
-        <div key={`${v.vessel_name}-${v.voyage_number}`} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", marginBottom: "12px", overflow: "hidden" }}>
+        <div key={`${v.vessel_name}-${v.voyage_number}`} style={{ ...GLASS_STYLE, borderRadius: "12px", marginBottom: "12px", overflow: "hidden" }}>
           <div style={{ background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`, padding: "12px 16px" }}>
             <div style={{ fontSize: "14px", fontWeight: 700, color: OFFWHITE }}>🛳 {v.vessel_name}</div>
             {v.voyage_number && <div style={{ fontSize: "11px", color: "rgba(240,237,240,0.7)", fontFamily: "'DM Mono', monospace", marginTop: "2px" }}>Voyage {v.voyage_number}</div>}
@@ -738,7 +754,7 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
             {v.events.map((e, i) => {
               const ev = getVesselEvent(e.event_type);
               return (
-                <div key={e.id} style={{ display: "flex", gap: "10px", padding: "10px", alignItems: "flex-start", borderBottom: i < v.events.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                <div key={e.id} style={{ display: "flex", gap: "10px", padding: "10px", alignItems: "flex-start", borderBottom: i < v.events.length - 1 ? `1px solid rgba(0,0,0,0.05)` : "none" }}>
                   <div style={{ width: "30px", height: "30px", borderRadius: "50%", background: `${ev.color}15`, color: ev.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", flexShrink: 0 }}>{ev.icon}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
@@ -749,7 +765,7 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
                       {formatDateTime(e.event_date)} 
                       {e.latitude && e.longitude && <span style={{ fontFamily: "'DM Mono', monospace", marginLeft: "6px" }}>(Lat: {e.latitude}, Lng: {e.longitude})</span>}
                     </div>
-                    {e.notes && <div style={{ fontSize: "12px", color: TEXT, marginTop: "4px", padding: "6px 8px", background: OFFWHITE, borderRadius: "4px" }}>{e.notes}</div>}
+                    {e.notes && <div style={{ fontSize: "12px", color: TEXT, marginTop: "4px", padding: "6px 8px", background: "rgba(255,255,255,0.5)", borderRadius: "4px" }}>{e.notes}</div>}
                     {e.created_by_email && <div style={{ fontSize: "10px", color: MUTED, marginTop: "4px" }}>Logged by {e.created_by_email.split("@")[0]} • {timeAgo(e.created_at)}</div>}
                   </div>
                   {isAdmin && (
@@ -1200,10 +1216,24 @@ export default function CargoApp({ session }) {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: OFFWHITE, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ minHeight: "100vh", background: "#f0edf0", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", fontFamily: "sans-serif" }}>
+        {/* Hidden SVG Filter required for the gooey melt effect */}
+        <svg style={{ position: "absolute", width: 0, height: 0 }}>
+          <defs>
+            <filter id="gooey-filter">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
+              <feBlend in="SourceGraphic" in2="goo" />
+            </filter>
+          </defs>
+        </svg>
         <div style={{ textAlign: "center" }}>
-          <img src="/kraft-logo.png" alt="Kraft" style={{ width: "56px", height: "56px", marginBottom: "12px", objectFit: "contain" }} />
-          <div style={{ color: MUTED }}>Loading Kraft Manifest...</div>
+          <div className="goo-container">
+            <div className="goo-blob blob-1"></div>
+            <div className="goo-blob blob-2"></div>
+            <div className="goo-blob blob-3"></div>
+          </div>
+          <div style={{ color: "#5a6a7a", fontSize: "14px", fontWeight: 600, letterSpacing: "0.05em" }}>Loading Manifest...</div>
         </div>
       </div>
     );
@@ -1212,7 +1242,12 @@ export default function CargoApp({ session }) {
   if (printContainer) return <PrintView containerNo={printContainer} entries={grouped[printContainer] || []} meta={containerMeta[printContainer]} onClose={() => setPrintContainer(null)} />;
 
   return (
-    <div style={{ minHeight: "100vh", background: OFFWHITE, color: TEXT, fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
+    <div style={{ 
+      minHeight: "100vh", 
+      background: "radial-gradient(circle at top left, #e8eef8, transparent 40%), radial-gradient(circle at bottom right, #d0b0e0, transparent 40%), linear-gradient(135deg, #f0edf0 0%, #e0e8f7 100%)",
+      color: TEXT, 
+      fontFamily: "'DM Sans', 'Segoe UI', sans-serif" 
+    }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap');
         * { box-sizing: border-box; }
@@ -1221,11 +1256,9 @@ export default function CargoApp({ session }) {
       `}</style>
 
       <div style={{
-        background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`,
+        ...DARK_GLASS_STYLE,
         padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
         height: "64px", position: "sticky", top: 0, zIndex: 100,
-        boxShadow: "0 6px 20px rgba(13,30,60,0.25)",
-        borderBottom: "3px solid #f59e3c", 
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
           <img src="/kraft-logo.png" alt="Kraft" style={{ width: "40px", height: "40px", objectFit: "contain", flexShrink: 0 }} />
@@ -1277,7 +1310,12 @@ export default function CargoApp({ session }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "16px", padding: "8px 20px 0", background: "#ffffff", position: "sticky", top: "64px", zIndex: 90, borderBottom: `1px solid ${BORDER}`, overflowX: "auto", boxShadow: "0 2px 10px rgba(0,0,0,0.03)" }}>
+      <div style={{ 
+        ...GLASS_STYLE,
+        borderRadius: "0 0 16px 16px",
+        margin: "0 16px",
+        display: "flex", gap: "16px", padding: "8px 20px 0", position: "sticky", top: "64px", zIndex: 90, overflowX: "auto" 
+      }}>
         {[
           ["entry", "📋 New Entry"], 
           ["log", `📦 Manifest (${Object.keys(grouped).length})`], 
@@ -1311,10 +1349,10 @@ export default function CargoApp({ session }) {
               <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>{editId ? "✏️ Edit Cargo Entry" : "📋 New Cargo Entry"}</h2>
               <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>{editId ? "Update the details below and save." : "Same container number will be grouped automatically as LCL cargo."}</p>
             </div>
-            <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "14px", padding: "20px" }}>
+            <div style={{ ...GLASS_STYLE, borderRadius: "14px", padding: "20px" }}>
               {!editId && <AIDocReader onExtracted={(data) => setForm(f => ({ ...f, ...data }))} />}
               {lclBannerEntry && (
-                <div style={{ background: "#e6f7ed", border: "1px solid #9eddb8", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ background: "rgba(230,247,237,0.8)", border: "1px solid #9eddb8", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={{ fontSize: "18px" }}>📦</span>
                   <div>
                     <div style={{ fontSize: "12px", fontWeight: 700, color: "#1a5c32" }}>LCL Container Detected</div>
@@ -1335,10 +1373,10 @@ export default function CargoApp({ session }) {
                       <button key={opt} type="button" onClick={() => handleFieldChange("load_type", opt)}
                         style={{
                           flex: 1, padding: "9px 4px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
-                          background: form.load_type === opt ? NAVY : "#fff",
+                          background: form.load_type === opt ? NAVY : "rgba(255,255,255,0.7)",
                           color: form.load_type === opt ? "#fff" : NAVY,
-                          border: `1px solid ${form.load_type === opt ? NAVY : BORDER}`,
-                          cursor: "pointer", fontFamily: "inherit",
+                          border: `1px solid ${form.load_type === opt ? NAVY : "rgba(255,255,255,0.8)"}`,
+                          cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s"
                         }}>{opt || "Auto"}</button>
                     ))}
                   </div>
@@ -1350,10 +1388,10 @@ export default function CargoApp({ session }) {
                       <button key={opt} type="button" onClick={() => handleFieldChange("container_size", form.container_size === opt ? "" : opt)}
                         style={{
                           flex: 1, padding: "9px 2px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
-                          background: form.container_size === opt ? NAVY : "#fff",
+                          background: form.container_size === opt ? NAVY : "rgba(255,255,255,0.7)",
                           color: form.container_size === opt ? "#fff" : NAVY,
-                          border: `1px solid ${form.container_size === opt ? NAVY : BORDER}`,
-                          cursor: "pointer", fontFamily: "'DM Mono', monospace",
+                          border: `1px solid ${form.container_size === opt ? NAVY : "rgba(255,255,255,0.8)"}`,
+                          cursor: "pointer", fontFamily: "'DM Mono', monospace", transition: "all 0.2s"
                         }}>{opt}</button>
                     ))}
                   </div>
@@ -1371,7 +1409,7 @@ export default function CargoApp({ session }) {
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Goods Description <span style={{ color: "#c0392b" }}>*</span></label>
                   <textarea value={form.goods_description || ""} onChange={e => handleFieldChange("goods_description", e.target.value)} placeholder="Describe the goods..." rows={2}
-                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: errors.goods_description ? "#fef8f8" : "#fff", border: `1px solid ${errors.goods_description ? "#e74c3c" : BORDER}`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: errors.goods_description ? "rgba(231,76,60,0.1)" : "rgba(255,255,255,0.7)", border: `1px solid ${errors.goods_description ? "#e74c3c" : "rgba(255,255,255,0.8)"}`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
                   {errors.goods_description && <div style={{ fontSize: "11px", color: "#c0392b", marginTop: "4px" }}>{errors.goods_description}</div>}
                 </div>
                 <Field label="Container No." field="container_no" placeholder="e.g. MSCU1234567" required half value={form.container_no} error={errors.container_no} onChange={handleFieldChange} />
@@ -1381,12 +1419,12 @@ export default function CargoApp({ session }) {
                 <div style={{ gridColumn: "span 2" }}>
                   <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>📝 Remarks (Optional)</label>
                   <textarea value={form.remarks || ""} onChange={e => handleFieldChange("remarks", e.target.value)} placeholder="e.g. Fragile, hold for inspection, advance paid..." rows={2}
-                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "#fff", border: `1px solid ${BORDER}`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.8)`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
                 </div>
               </div>
               <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
                 <button onClick={handleSubmit} style={{ flex: 1, padding: "12px", borderRadius: "10px", fontSize: "14px", fontWeight: 700, background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`, border: "none", color: OFFWHITE, cursor: "pointer", letterSpacing: "0.03em" }}>{editId ? "✅ Update Entry" : "💾 Save Cargo Entry"}</button>
-                {editId && <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); }} style={{ padding: "12px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, background: "#fff", border: `1px solid ${BORDER}`, color: MUTED, cursor: "pointer" }}>Cancel</button>}
+                {editId && <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); }} style={{ padding: "12px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, background: "rgba(255,255,255,0.8)", border: `1px solid rgba(255,255,255,0.9)`, color: MUTED, cursor: "pointer" }}>Cancel</button>}
               </div>
             </div>
           </div>
@@ -1399,7 +1437,7 @@ export default function CargoApp({ session }) {
                 <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>Manifest Log</h2>
                 <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>{filteredKeys.length} of {Object.keys(grouped).length} containers shown</p>
               </div>
-              <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); setActiveTab("entry"); }} style={{ padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`, border: "none", color: OFFWHITE, cursor: "pointer" }}>+ New Entry</button>
+              <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); setActiveTab("entry"); }} style={{ padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`, border: "none", color: OFFWHITE, cursor: "pointer", boxShadow: "0 4px 12px rgba(13,30,60,0.15)" }}>+ New Entry</button>
             </div>
 
             {(() => {
@@ -1409,7 +1447,7 @@ export default function CargoApp({ session }) {
               });
               if (expiringEntries.length === 0) return null;
               return (
-                <div style={{ background: "#fdecea", border: "1px solid #f5b8b0", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px", display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                <div style={{ background: "rgba(253,236,234,0.8)", border: "1px solid #f5b8b0", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px", display: "flex", gap: "10px", alignItems: "flex-start", backdropFilter: "blur(8px)" }}>
                   <span style={{ fontSize: "20px" }}>🚨</span>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: "13px", fontWeight: 700, color: "#c0392b" }}>E-Way Bills Need Attention</div>
@@ -1424,38 +1462,38 @@ export default function CargoApp({ session }) {
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: MUTED, fontSize: "14px" }}>🔍</span>
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search container, vehicle, shipper..." style={{ width: "100%", padding: "11px 14px 11px 38px", borderRadius: "10px", background: "#fff", border: `1px solid ${BORDER}`, color: TEXT, fontSize: "14px", outline: "none" }} />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search container, vehicle, shipper..." style={{ width: "100%", padding: "11px 14px 11px 38px", borderRadius: "10px", background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.9)`, color: TEXT, fontSize: "14px", outline: "none", backdropFilter: "blur(4px)" }} />
               </div>
-              <button onClick={() => setShowFilters(!showFilters)} style={{ padding: "11px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, background: showFilters ? NAVY : "#fff", border: `1px solid ${showFilters ? NAVY : BORDER}`, color: showFilters ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>🔧 {(statusFilter !== "all" || dateFromFilter || dateToFilter) ? "•" : ""} Filters</button>
+              <button onClick={() => setShowFilters(!showFilters)} style={{ padding: "11px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, background: showFilters ? NAVY : "rgba(255,255,255,0.7)", border: `1px solid ${showFilters ? NAVY : "rgba(255,255,255,0.9)"}`, color: showFilters ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>🔧 {(statusFilter !== "all" || dateFromFilter || dateToFilter) ? "•" : ""} Filters</button>
             </div>
 
             {showFilters && (
-              <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
+              <div style={{ ...GLASS_STYLE, borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>From Date</label>
-                    <input type="date" value={dateFromFilter} onChange={e => setDateFromFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${BORDER}`, fontSize: "13px", color: TEXT, background: "#fff" }} />
+                    <input type="date" value={dateFromFilter} onChange={e => setDateFromFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", color: TEXT, background: "rgba(255,255,255,0.7)" }} />
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>To Date</label>
-                    <input type="date" value={dateToFilter} onChange={e => setDateToFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${BORDER}`, fontSize: "13px", color: TEXT, background: "#fff" }} />
+                    <input type="date" value={dateToFilter} onChange={e => setDateToFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", color: TEXT, background: "rgba(255,255,255,0.7)" }} />
                   </div>
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Status</label>
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    <button onClick={() => setStatusFilter("all")} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === "all" ? NAVY : "#fff", color: statusFilter === "all" ? "#fff" : NAVY, border: `1px solid ${statusFilter === "all" ? NAVY : BORDER}`, cursor: "pointer" }}>All</button>
+                    <button onClick={() => setStatusFilter("all")} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === "all" ? NAVY : "rgba(255,255,255,0.7)", color: statusFilter === "all" ? "#fff" : NAVY, border: `1px solid ${statusFilter === "all" ? NAVY : "rgba(255,255,255,0.8)"}`, cursor: "pointer" }}>All</button>
                     {STATUSES.map(s => (
-                      <button key={s.id} onClick={() => setStatusFilter(s.id)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === s.id ? s.color : s.bg, color: statusFilter === s.id ? "#fff" : s.color, border: `1px solid ${statusFilter === s.id ? s.color : s.border}`, cursor: "pointer" }}>{s.icon} {s.label}</button>
+                      <button key={s.id} onClick={() => setStatusFilter(s.id)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === s.id ? s.color : "rgba(255,255,255,0.7)", color: statusFilter === s.id ? "#fff" : s.color, border: `1px solid ${statusFilter === s.id ? s.color : "rgba(255,255,255,0.8)"}`, cursor: "pointer" }}>{s.icon} {s.label}</button>
                     ))}
                   </div>
                 </div>
-                {(dateFromFilter || dateToFilter || statusFilter !== "all") && <button onClick={() => { setDateFromFilter(""); setDateToFilter(""); setStatusFilter("all"); }} style={{ marginTop: "10px", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "#fff", border: `1px solid ${BORDER}`, color: MUTED, cursor: "pointer" }}>✕ Clear filters</button>}
+                {(dateFromFilter || dateToFilter || statusFilter !== "all") && <button onClick={() => { setDateFromFilter(""); setDateToFilter(""); setStatusFilter("all"); }} style={{ marginTop: "10px", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "rgba(255,255,255,0.8)", border: `1px solid rgba(255,255,255,0.9)`, color: MUTED, cursor: "pointer" }}>✕ Clear filters</button>}
               </div>
             )}
 
             {filteredKeys.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 20px", border: `1px dashed ${BORDER}`, borderRadius: "14px", background: "#fff" }}>
+              <div style={{ textAlign: "center", padding: "60px 20px", ...GLASS_STYLE, borderRadius: "14px" }}>
                 <div style={{ fontSize: "40px", marginBottom: "12px" }}>📭</div>
                 <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>{search || statusFilter !== "all" || dateFromFilter || dateToFilter ? "No results found" : "No cargo entries yet"}</div>
               </div>
@@ -1493,7 +1531,7 @@ export default function CargoApp({ session }) {
       </div>
 
       {pushPrompt && (
-        <div style={{ position: "fixed", bottom: "16px", left: "16px", right: "16px", maxWidth: "440px", margin: "0 auto", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "12px", padding: "16px", boxShadow: "0 4px 20px rgba(13,30,60,0.15)", zIndex: 500, animation: "fadeUp 0.3s ease" }}>
+        <div style={{ position: "fixed", bottom: "16px", left: "16px", right: "16px", maxWidth: "440px", margin: "0 auto", ...GLASS_STYLE, borderRadius: "12px", padding: "16px", zIndex: 500, animation: "fadeUp 0.3s ease" }}>
           <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
             <div style={{ fontSize: "24px" }}>🔔</div>
             <div style={{ flex: 1 }}>
@@ -1501,7 +1539,7 @@ export default function CargoApp({ session }) {
               <div style={{ fontSize: "12px", color: MUTED, marginBottom: "10px" }}>Be alerted when teammates add new cargo, even when the app is closed.</div>
               <div style={{ display: "flex", gap: "6px" }}>
                 <button onClick={enablePush} style={{ padding: "7px 14px", borderRadius: "6px", background: NAVY, color: "#fff", border: "none", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>Enable</button>
-                <button onClick={dismissPushPrompt} style={{ padding: "7px 14px", borderRadius: "6px", background: "#fff", color: MUTED, border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>Not now</button>
+                <button onClick={dismissPushPrompt} style={{ padding: "7px 14px", borderRadius: "6px", background: "rgba(255,255,255,0.8)", color: MUTED, border: `1px solid rgba(255,255,255,0.9)`, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>Not now</button>
               </div>
             </div>
           </div>
@@ -1509,20 +1547,20 @@ export default function CargoApp({ session }) {
       )}
 
       {toast && (
-        <div style={{ position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", background: toast.type === "error" ? "#fdecea" : "#e6f7ed", border: `1px solid ${toast.type === "error" ? "#f5b8b0" : "#9eddb8"}`, color: toast.type === "error" ? "#c0392b" : "#1a5c32", padding: "12px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, boxShadow: "0 4px 16px rgba(13,30,60,0.15)", zIndex: 1000, animation: "fadeUp 0.2s ease" }}>
+        <div style={{ position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", background: toast.type === "error" ? "rgba(253,236,234,0.9)" : "rgba(230,247,237,0.9)", border: `1px solid ${toast.type === "error" ? "#f5b8b0" : "#9eddb8"}`, backdropFilter: "blur(8px)", color: toast.type === "error" ? "#c0392b" : "#1a5c32", padding: "12px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, boxShadow: "0 4px 16px rgba(13,30,60,0.15)", zIndex: 1000, animation: "fadeUp 0.2s ease" }}>
           {toast.type === "error" ? "🗑️" : "✅"} {toast.msg}
         </div>
       )}
 
       {deleteConfirm && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(13,30,60,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "20px" }}>
-          <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "14px", padding: "28px", maxWidth: "360px", width: "100%", textAlign: "center" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(13,30,60,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "20px" }}>
+          <div style={{ ...GLASS_STYLE, borderRadius: "14px", padding: "28px", maxWidth: "360px", width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: "32px", marginBottom: "12px" }}>⚠️</div>
             <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Delete Entry?</div>
             <div style={{ fontSize: "13px", color: MUTED, marginBottom: "24px" }}>This cannot be undone.</div>
             <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
-              <button onClick={() => setDeleteConfirm(null)} style={{ padding: "10px 20px", borderRadius: "8px", border: `1px solid ${BORDER}`, background: "#fff", color: MUTED, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-              <button onClick={confirmDelete} style={{ padding: "10px 20px", borderRadius: "8px", border: "1px solid #f5b8b0", background: "#fdecea", color: "#c0392b", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+              <button onClick={() => setDeleteConfirm(null)} style={{ padding: "10px 20px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, background: "rgba(255,255,255,0.7)", color: MUTED, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+              <button onClick={confirmDelete} style={{ padding: "10px 20px", borderRadius: "8px", border: "1px solid #f5b8b0", background: "rgba(253,236,234,0.9)", color: "#c0392b", cursor: "pointer", fontWeight: 600 }}>Delete</button>
             </div>
           </div>
         </div>
