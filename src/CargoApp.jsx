@@ -5,6 +5,7 @@ import Globe from "react-globe.gl";
 import { supabase } from "./supabaseClient";
 import AIDocReader from "./AIDocReader";
 
+// --- THEME CONSTANTS ---
 const NAVY = "#0d1e3c";
 const NAVY2 = "#1a3a6a";
 const OFFWHITE = "#f0edf0";
@@ -12,17 +13,19 @@ const BORDER = "#d0cad8";
 const MUTED = "#5a6a7a";
 const TEXT = "#0d1e3c";
 
-// --- Glassmorphism Styles ---
-const GLASS_STYLE = {
-  background: "rgba(255, 255, 255, 0.65)",
+// --- Dynamic Glassmorphism Styles ---
+const getGlassStyle = (isDark) => ({
+  background: isDark ? "rgba(13, 30, 60, 0.45)" : "rgba(255, 255, 255, 0.65)",
   backdropFilter: "blur(16px)",
   WebkitBackdropFilter: "blur(16px)",
-  border: "1px solid rgba(255, 255, 255, 0.6)",
-  boxShadow: "0 8px 32px rgba(13, 30, 60, 0.05)",
-};
+  border: isDark ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid rgba(255, 255, 255, 0.6)",
+  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
+  color: isDark ? "#f0edf0" : "#0d1e3c",
+  transition: "all 0.3s ease"
+});
 
 const DARK_GLASS_STYLE = {
-  background: "rgba(13, 30, 60, 0.75)",
+  background: "rgba(13, 30, 60, 0.85)",
   backdropFilter: "blur(20px)",
   WebkitBackdropFilter: "blur(20px)",
   borderBottom: "3px solid #f59e3c",
@@ -69,6 +72,7 @@ const initialForm = {
   eway_valid_till: "", freight_status: "", payment_status: "",
 };
 
+// --- HELPER FUNCTIONS ---
 function todayStr() {
   const d = new Date();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -154,6 +158,7 @@ async function sendPushNotification(title, body, excludeUserId) {
   } catch (err) { console.error("Push send failed:", err); }
 }
 
+// --- SHARED UI COMPONENTS ---
 function Badge({ children, color = "navy" }) {
   const colors = {
     navy: { bg: "rgba(13,30,60,0.1)", text: NAVY, border: "rgba(13,30,60,0.2)" },
@@ -187,42 +192,37 @@ function StatusBadge({ status }) {
 
 const monoFields = new Set(["container_no", "vehicle_number", "gst_number", "eway_bill", "voyage_number"]);
 
-const Field = memo(({ label, field, placeholder, required, half, value, error, onChange, type = "text", listId, list }) => (
+const Field = memo(({ label, field, placeholder, required, half, value, error, onChange, type = "text", listId, list, isDarkMode }) => (
   <div style={{ gridColumn: half ? "span 1" : "span 2" }}>
-    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>
+    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>
       {label} {required && <span style={{ color: "#c0392b" }}>*</span>}
     </label>
     <input type={type} list={listId} value={value || ""} onChange={e => onChange(field, e.target.value)} placeholder={placeholder}
       style={{
         width: "100%", padding: "10px 14px", borderRadius: "8px",
-        background: error ? "rgba(231,76,60,0.1)" : "rgba(255,255,255,0.7)",
-        border: `1px solid ${error ? "#e74c3c" : "rgba(255,255,255,0.8)"}`,
-        color: TEXT, fontSize: "14px", outline: "none", boxSizing: "border-box",
+        background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)",
+        border: `1px solid ${error ? "#e74c3c" : (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)")}`,
+        color: isDarkMode ? "#fff" : TEXT, fontSize: "14px", outline: "none", boxSizing: "border-box",
         fontFamily: monoFields.has(field) ? "'DM Mono', monospace" : "inherit",
-        transition: "all 0.2s",
-        backdropFilter: "blur(4px)"
+        transition: "all 0.2s"
       }}
-      onFocus={e => { e.target.style.borderColor = NAVY; e.target.style.background = "#fff"; }}
-      onBlur={e => { e.target.style.borderColor = error ? "#e74c3c" : "rgba(255,255,255,0.8)"; e.target.style.background = error ? "rgba(231,76,60,0.1)" : "rgba(255,255,255,0.7)"; }}
     />
     {listId && list && <datalist id={listId}>{list.map(opt => <option key={opt} value={opt} />)}</datalist>}
     {error && <div style={{ fontSize: "11px", color: "#c0392b", marginTop: "4px", textAlign: "center" }}>{error}</div>}
   </div>
 ));
 
-const PillSelector = memo(({ label, value, onChange, options }) => (
+const PillSelector = memo(({ label, value, onChange, options, isDarkMode }) => (
   <div style={{ gridColumn: "span 1" }}>
-    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>
-      {label}
-    </label>
+    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>{label}</label>
     <div style={{ display: "flex", gap: "4px" }}>
       {options.map(opt => (
         <button key={opt.value} type="button" onClick={() => onChange(opt.value === value ? "" : opt.value)}
           style={{
             flex: 1, padding: "9px 4px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
-            background: value === opt.value ? (opt.color || NAVY) : "rgba(255,255,255,0.7)",
-            color: value === opt.value ? "#fff" : NAVY,
-            border: `1px solid ${value === opt.value ? (opt.color || NAVY) : "rgba(255,255,255,0.8)"}`,
+            background: value === opt.value ? (opt.color || NAVY) : (isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)"),
+            color: value === opt.value ? "#fff" : (isDarkMode ? "#cbd5e0" : NAVY),
+            border: `1px solid ${value === opt.value ? (opt.color || NAVY) : (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)")}`,
             cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", transition: "all 0.2s"
           }}>{opt.label}</button>
       ))}
@@ -230,7 +230,8 @@ const PillSelector = memo(({ label, value, onChange, options }) => (
   </div>
 ));
 
-function ContainerCard({ containerNo, entries, meta, userEmail, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer, onUpdateLoadType, isAdmin }) {
+// --- SUB-COMPONENTS ---
+function ContainerCard({ containerNo, entries, meta, userEmail, onEdit, onDelete, onUpdateStatus, onPrint, onExportContainer, onUpdateLoadType, isAdmin, glassStyle, isDarkMode }) {
   const [expanded, setExpanded] = useState(true);
   const [statusMenu, setStatusMenu] = useState(false);
   const status = meta?.status || "stuffing";
@@ -238,7 +239,7 @@ function ContainerCard({ containerNo, entries, meta, userEmail, onEdit, onDelete
 
   return (
     <div style={{ 
-      ...GLASS_STYLE,
+      ...glassStyle,
       borderLeft: `5px solid ${getStatusInfo(status).color}`, 
       borderRadius: "12px", 
       overflow: "hidden", 
@@ -262,7 +263,7 @@ function ContainerCard({ containerNo, entries, meta, userEmail, onEdit, onDelete
       </div>
 
       {expanded && (
-        <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.3)" }}>
+        <div style={{ padding: "14px 16px" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px", alignItems: "center" }}>
             <div style={{ position: "relative" }}>
               <button onClick={(e) => { e.stopPropagation(); setStatusMenu(!statusMenu); }} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
@@ -280,19 +281,19 @@ function ContainerCard({ containerNo, entries, meta, userEmail, onEdit, onDelete
             <select value={meta?.load_type_override || "auto"}
               onChange={(e) => { e.stopPropagation(); onUpdateLoadType(containerNo, e.target.value); }}
               onClick={(e) => e.stopPropagation()}
-              style={{ background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.8)`, borderRadius: "6px", color: NAVY, padding: "5px 8px", fontSize: "11px", fontWeight: 600, fontFamily: "'DM Mono', monospace", cursor: "pointer" }}>
+              style={{ background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, borderRadius: "6px", color: isDarkMode ? "#cbd5e0" : NAVY, padding: "5px 8px", fontSize: "11px", fontWeight: 600, fontFamily: "'DM Mono', monospace", cursor: "pointer" }}>
               <option value="auto">AUTO ({getContainerLoadType(entries, meta)})</option>
               <option value="FCL">FCL</option>
               <option value="LCL">LCL</option>
             </select>
             <div style={{ flex: 1 }} />
-            <button onClick={(e) => { e.stopPropagation(); onExportContainer(containerNo); }} style={{ background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.8)`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>📊 Excel</button>
-            <button onClick={(e) => { e.stopPropagation(); onPrint(containerNo); }} style={{ background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.8)`, borderRadius: "6px", color: NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>🖨 Print</button>
+            <button onClick={(e) => { e.stopPropagation(); onExportContainer(containerNo); }} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(0,0,0,0.1)", borderRadius: "6px", color: isDarkMode ? "#fff" : NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>📊 Excel</button>
+            <button onClick={(e) => { e.stopPropagation(); onPrint(containerNo); }} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(0,0,0,0.1)", borderRadius: "6px", color: isDarkMode ? "#fff" : NAVY, padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>🖨 Print</button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {entries.map((entry, idx) => (
-              <div key={entry.id} style={{ background: "rgba(255,255,255,0.6)", border: `1px solid rgba(255,255,255,0.8)`, borderRadius: "8px", padding: "14px 16px" }}>
+              <div key={entry.id} style={{ background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.6)", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, borderRadius: "8px", padding: "14px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", color: MUTED }}>#{String(idx + 1).padStart(2, "0")}</span>
@@ -301,9 +302,9 @@ function ContainerCard({ containerNo, entries, meta, userEmail, onEdit, onDelete
                     {entry.created_by_email && <Badge color="slate">👤 {entry.created_by_email.split("@")[0]}</Badge>}
                   </div>
                   <div style={{ display: "flex", gap: "6px" }}>
-                    <button onClick={() => onEdit(entry)} style={{ background: "rgba(13,30,60,0.05)", border: "1px solid rgba(13,30,60,0.1)", borderRadius: "6px", color: NAVY, padding: "4px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Edit</button>
+                    <button onClick={() => onEdit(entry)} style={{ background: "none", border: "none", color: isDarkMode ? "#cbd5e0" : NAVY, fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Edit</button>
                     {isAdmin && (
-                      <button onClick={() => onDelete(entry.id)} style={{ background: "rgba(192,57,43,0.05)", border: "1px solid rgba(192,57,43,0.2)", borderRadius: "6px", color: "#c0392b", padding: "4px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+                      <button onClick={() => onDelete(entry.id)} style={{ background: "none", border: "none", color: "#c0392b", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Delete</button>
                     )}
                   </div>
                 </div>
@@ -318,7 +319,7 @@ function ContainerCard({ containerNo, entries, meta, userEmail, onEdit, onDelete
                   ].filter(Boolean).map(([label, value]) => (
                     <div key={label}>
                       <div style={{ fontSize: "10px", color: MUTED, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "2px" }}>{label}</div>
-                      <div style={{ fontSize: "13px", color: TEXT, fontWeight: 500, wordBreak: "break-word" }}>{value}</div>
+                      <div style={{ fontSize: "13px", fontWeight: 500, wordBreak: "break-word" }}>{value}</div>
                     </div>
                   ))}
                 </div>
@@ -375,7 +376,7 @@ function ContainerCard({ containerNo, entries, meta, userEmail, onEdit, onDelete
   );
 }
 
-function Dashboard({ entries, containerMeta }) {
+function Dashboard({ entries, containerMeta, glassStyle, isDarkMode }) {
   const stats = useMemo(() => {
     const containers = {};
     entries.forEach(e => {
@@ -403,17 +404,17 @@ function Dashboard({ entries, containerMeta }) {
 
   if (entries.length === 0) {
     return (
-      <div style={{ textAlign: "center", padding: "60px 20px", ...GLASS_STYLE, borderRadius: "14px" }}>
+      <div style={{ textAlign: "center", padding: "60px 20px", ...glassStyle, borderRadius: "14px" }}>
         <div style={{ fontSize: "40px", marginBottom: "12px" }}>📊</div>
-        <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No data to display</div>
+        <div style={{ fontSize: "16px", color: isDarkMode ? "#fff" : NAVY, fontWeight: 600 }}>No data to display</div>
       </div>
     );
   }
 
   const statCard = (label, value) => (
-    <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
+    <div style={{ ...glassStyle, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
       <div style={{ fontSize: "11px", color: MUTED, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "4px" }}>{label}</div>
-      <div style={{ fontSize: "28px", fontWeight: 700, color: NAVY, fontFamily: "'DM Mono', monospace" }}>{value}</div>
+      <div style={{ fontSize: "28px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, fontFamily: "'DM Mono', monospace" }}>{value}</div>
     </div>
   );
 
@@ -423,53 +424,53 @@ function Dashboard({ entries, containerMeta }) {
         {statCard("Containers", stats.totalContainers)}
         {statCard("Total Cargos", stats.totalCargos)}
       </div>
-      <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>📦 Containers by Status</div>
+      <div style={{ ...glassStyle, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>📦 Containers by Status</div>
         {stats.statusCounts.map(s => (
           <div key={s.name} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-            <div style={{ width: "90px", fontSize: "12px", color: MUTED, fontWeight: 600 }}>{s.name}</div>
-            <div style={{ flex: 1, height: "20px", background: "rgba(0,0,0,0.05)", borderRadius: "4px", overflow: "hidden" }}>
+            <div style={{ width: "90px", fontSize: "12px", color: isDarkMode ? "#cbd5e0" : MUTED, fontWeight: 600 }}>{s.name}</div>
+            <div style={{ flex: 1, height: "20px", background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)", borderRadius: "4px", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${(s.value / Math.max(stats.totalContainers, 1)) * 100}%`, background: s.color, transition: "width 0.3s" }} />
             </div>
-            <div style={{ width: "30px", textAlign: "right", fontSize: "13px", fontWeight: 700, color: NAVY, fontFamily: "'DM Mono', monospace" }}>{s.value}</div>
+            <div style={{ width: "30px", textAlign: "right", fontSize: "13px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, fontFamily: "'DM Mono', monospace" }}>{s.value}</div>
           </div>
         ))}
       </div>
       {stats.monthlyData.length > 1 && (
-        <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>📅 Cargos Per Month</div>
+        <div style={{ ...glassStyle, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>📅 Cargos Per Month</div>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={stats.monthlyData} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)"} />
               <XAxis dataKey="month" stroke={MUTED} style={{ fontSize: "11px" }} />
               <YAxis stroke={MUTED} style={{ fontSize: "11px" }} />
-              <Tooltip contentStyle={{ borderRadius: "8px", background: "rgba(255,255,255,0.8)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.9)", fontSize: "12px" }} />
-              <Line type="monotone" dataKey="count" stroke={NAVY} strokeWidth={2} dot={{ fill: NAVY, r: 4 }} />
+              <Tooltip contentStyle={{ borderRadius: "8px", background: isDarkMode ? "rgba(13, 30, 60, 0.9)" : "rgba(255,255,255,0.8)", border: "none", color: isDarkMode ? "#fff" : "#000", fontSize: "12px" }} />
+              <Line type="monotone" dataKey="count" stroke={isDarkMode ? "#f59e3c" : NAVY} strokeWidth={2} dot={{ fill: isDarkMode ? "#f59e3c" : NAVY, r: 4 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       )}
-      <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>🏢 Top Shippers</div>
+      <div style={{ ...glassStyle, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>🏢 Top Shippers</div>
         {stats.topShippers.map((s, i) => (
-          <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: i < stats.topShippers.length - 1 ? `1px solid rgba(0,0,0,0.05)` : "none" }}>
+          <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: i < stats.topShippers.length - 1 ? `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)"}` : "none" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
               <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", color: MUTED, minWidth: "20px" }}>#{i + 1}</span>
-              <span style={{ fontSize: "13px", color: TEXT, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+              <span style={{ fontSize: "13px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
             </div>
-            <Badge color="navy">{s.count}</Badge>
+            <Badge color={isDarkMode ? "amber" : "navy"}>{s.count}</Badge>
           </div>
         ))}
       </div>
-      <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>🎯 Top Consignees</div>
+      <div style={{ ...glassStyle, borderRadius: "12px", padding: "16px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>🎯 Top Consignees</div>
         {stats.topConsignees.map((s, i) => (
-          <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: i < stats.topConsignees.length - 1 ? `1px solid rgba(0,0,0,0.05)` : "none" }}>
+          <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: i < stats.topConsignees.length - 1 ? `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)"}` : "none" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
               <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", color: MUTED, minWidth: "20px" }}>#{i + 1}</span>
-              <span style={{ fontSize: "13px", color: TEXT, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+              <span style={{ fontSize: "13px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
             </div>
-            <Badge color="navy">{s.count}</Badge>
+            <Badge color={isDarkMode ? "amber" : "navy"}>{s.count}</Badge>
           </div>
         ))}
       </div>
@@ -477,12 +478,12 @@ function Dashboard({ entries, containerMeta }) {
   );
 }
 
-function ActivityTab({ activities }) {
+function ActivityTab({ activities, glassStyle, isDarkMode }) {
   if (activities.length === 0) {
     return (
-      <div style={{ textAlign: "center", padding: "60px 20px", ...GLASS_STYLE, borderRadius: "14px" }}>
+      <div style={{ textAlign: "center", padding: "60px 20px", ...glassStyle, borderRadius: "14px" }}>
         <div style={{ fontSize: "40px", marginBottom: "12px" }}>📜</div>
-        <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No activity yet</div>
+        <div style={{ fontSize: "16px", color: isDarkMode ? "#fff" : NAVY, fontWeight: 600 }}>No activity yet</div>
       </div>
     );
   }
@@ -494,20 +495,20 @@ function ActivityTab({ activities }) {
     vessel_movement: { icon: "🚢", color: "#6b21a8", label: "Vessel Movement" },
   };
   return (
-    <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "8px" }}>
+    <div style={{ ...glassStyle, borderRadius: "12px", padding: "8px" }}>
       {activities.map((a, i) => {
         const info = actionIcons[a.action] || { icon: "📝", color: MUTED, label: a.action };
         const userName = a.user_email ? a.user_email.split("@")[0] : "Someone";
         return (
-          <div key={a.id} style={{ padding: "12px", borderBottom: i < activities.length - 1 ? `1px solid rgba(0,0,0,0.05)` : "none", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+          <div key={a.id} style={{ padding: "12px", borderBottom: i < activities.length - 1 ? `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)"}` : "none", display: "flex", alignItems: "flex-start", gap: "10px" }}>
             <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: `${info.color}15`, color: info.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>{info.icon}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "13px", color: TEXT, fontWeight: 500 }}>
-                <strong style={{ color: NAVY }}>{userName}</strong> · {info.label}
+              <div style={{ fontSize: "13px", fontWeight: 500 }}>
+                <strong>{userName}</strong> · {info.label}
                 {a.container_no && <span style={{ fontFamily: "'DM Mono', monospace", color: MUTED, fontSize: "12px" }}> · {a.container_no}</span>}
               </div>
               {a.details && (
-                <div style={{ fontSize: "12px", color: MUTED, marginTop: "2px" }}>
+                <div style={{ fontSize: "12px", color: isDarkMode ? "#cbd5e0" : MUTED, marginTop: "2px" }}>
                   {a.details.summary || (a.details.shipper && `${a.details.shipper} → ${a.details.consignee}`) || (a.details.from && `${a.details.from} → ${a.details.to}`)}
                 </div>
               )}
@@ -520,7 +521,7 @@ function ActivityTab({ activities }) {
   );
 }
 
-function VesselGlobe({ vesselMovements }) {
+function VesselGlobe({ vesselMovements, isDarkMode }) {
   const globeEl = useRef();
   const containerRef = useRef();
   const [dimensions, setDimensions] = useState({ width: 0, height: 400 });
@@ -570,7 +571,7 @@ function VesselGlobe({ vesselMovements }) {
   }, [latestMovements]);
 
   return (
-    <div ref={containerRef} style={{ height: "400px", width: "100%", borderRadius: "12px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.6)", boxShadow: "0 8px 32px rgba(13, 30, 60, 0.15)", marginBottom: "16px", backgroundColor: "#0d1e3c" }}>
+    <div ref={containerRef} style={{ height: "400px", width: "100%", borderRadius: "12px", overflow: "hidden", border: isDarkMode ? "1px solid rgba(255,255,255,0.2)" : "1px solid rgba(255,255,255,0.6)", boxShadow: "0 8px 32px rgba(13, 30, 60, 0.15)", marginBottom: "16px", backgroundColor: "#0d1e3c" }}>
       {dimensions.width > 0 && (
         <Globe
           ref={globeEl}
@@ -593,7 +594,7 @@ function VesselGlobe({ vesselMovements }) {
   );
 }
 
-function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, showToast }) {
+function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, showToast, glassStyle, isDarkMode }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ vessel_name: "", voyage_number: "", event_type: "sailed", event_date: "", location: "", notes: "", latitude: "", longitude: "" });
   const [submitting, setSubmitting] = useState(false);
@@ -657,95 +658,95 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
         <div>
-          <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>🚢 Vessel Movements</h2>
-          <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>{grouped.length} voyage{grouped.length !== 1 ? "s" : ""} tracked</p>
+          <h2 style={{ fontSize: "20px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, margin: 0 }}>🚢 Vessel Movements</h2>
+          <p style={{ fontSize: "12px", color: isDarkMode ? "#a0aec0" : MUTED, margin: "4px 0 0" }}>{grouped.length} voyage{grouped.length !== 1 ? "s" : ""} tracked</p>
         </div>
         <button onClick={() => setShowForm(!showForm)} style={{
           padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-          background: showForm ? "rgba(255,255,255,0.8)" : `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`,
-          border: "1px solid rgba(255,255,255,0.6)",
-          color: showForm ? NAVY : OFFWHITE, cursor: "pointer",
+          background: showForm ? (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)") : (isDarkMode ? "#f59e3c" : `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`),
+          border: isDarkMode ? "none" : "1px solid rgba(255,255,255,0.6)",
+          color: showForm ? (isDarkMode ? "#fff" : NAVY) : OFFWHITE, cursor: "pointer",
         }}>{showForm ? "✕ Cancel" : "+ Add Movement"}</button>
       </div>
 
-      <VesselGlobe vesselMovements={vesselMovements} />
+      <VesselGlobe vesselMovements={vesselMovements} isDarkMode={isDarkMode} />
 
       {showForm && (
-        <div style={{ ...GLASS_STYLE, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+        <div style={{ ...glassStyle, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <div>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Vessel Name *</label>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Vessel Name *</label>
               <input list="vessels-list-mov" value={form.vessel_name} onChange={e => setForm({ ...form, vessel_name: e.target.value })} placeholder="e.g. MV APJ Karan 2"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, fontSize: "13px", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", color: isDarkMode ? "#fff" : "#000" }} />
               <datalist id="vessels-list-mov">{uniqueVessels.map(v => <option key={v} value={v} />)}</datalist>
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Voyage No.</label>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Voyage No.</label>
               <input value={form.voyage_number} onChange={e => setForm({ ...form, voyage_number: e.target.value })} placeholder="e.g. 024"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", fontFamily: "'DM Mono', monospace", background: "rgba(255,255,255,0.7)" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, fontSize: "13px", fontFamily: "'DM Mono', monospace", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", color: isDarkMode ? "#fff" : "#000" }} />
             </div>
             <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Event Type *</label>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Event Type *</label>
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                 {VESSEL_EVENTS.map(ev => (
                   <button key={ev.id} onClick={() => setForm({ ...form, event_type: ev.id })} style={{
                     padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600,
-                    background: form.event_type === ev.id ? ev.color : "rgba(255,255,255,0.7)",
+                    background: form.event_type === ev.id ? ev.color : (isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)"),
                     color: form.event_type === ev.id ? "#fff" : ev.color,
-                    border: `1px solid ${form.event_type === ev.id ? ev.color : "rgba(255,255,255,0.8)"}`, cursor: "pointer", transition: "all 0.2s"
+                    border: `1px solid ${form.event_type === ev.id ? ev.color : (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)")}`, cursor: "pointer", transition: "all 0.2s"
                   }}>{ev.icon} {ev.label}</button>
                 ))}
               </div>
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Date & Time *</label>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Date & Time *</label>
               <input type="datetime-local" value={form.event_date} onChange={e => setForm({ ...form, event_date: e.target.value })}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, fontSize: "13px", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", color: isDarkMode ? "#fff" : "#000" }} />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Location Name</label>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Location Name</label>
               <input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="e.g. Kolkata Port"
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, fontSize: "13px", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", color: isDarkMode ? "#fff" : "#000" }} />
             </div>
             
             <div style={{ gridColumn: "span 2", display: "flex", gap: "12px", alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Latitude</label>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Latitude</label>
                 <input type="number" step="any" value={form.latitude} onChange={e => setForm({ ...form, latitude: e.target.value })} placeholder="e.g. 22.57"
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)", fontFamily: "'DM Mono', monospace" }} />
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, fontSize: "13px", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", fontFamily: "'DM Mono', monospace", color: isDarkMode ? "#fff" : "#000" }} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Longitude</label>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Longitude</label>
                 <input type="number" step="any" value={form.longitude} onChange={e => setForm({ ...form, longitude: e.target.value })} placeholder="e.g. 88.36"
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", background: "rgba(255,255,255,0.7)", fontFamily: "'DM Mono', monospace" }} />
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, fontSize: "13px", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", fontFamily: "'DM Mono', monospace", color: isDarkMode ? "#fff" : "#000" }} />
               </div>
               <button onClick={fetchLiveLocation} disabled={fetchingLocation} type="button" style={{
-                height: "37px", padding: "0 16px", borderRadius: "8px", background: "rgba(255,255,255,0.8)", color: NAVY, border: "1px solid rgba(255,255,255,0.9)", fontWeight: 600, fontSize: "12px", cursor: fetchingLocation ? "not-allowed" : "pointer", whiteSpace: "nowrap"
+                height: "37px", padding: "0 16px", borderRadius: "8px", background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)", color: isDarkMode ? "#fff" : NAVY, border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.9)"}`, fontWeight: 600, fontSize: "12px", cursor: fetchingLocation ? "not-allowed" : "pointer", whiteSpace: "nowrap"
               }}>
                 {fetchingLocation ? "⏳ Searching..." : "📍 Get Coordinates from Location"}
               </button>
             </div>
 
             <div style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Notes</label>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Notes</label>
               <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Optional details..." rows={2}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", fontFamily: "inherit", resize: "vertical", background: "rgba(255,255,255,0.7)" }} />
+                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, fontSize: "13px", fontFamily: "inherit", resize: "vertical", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", color: isDarkMode ? "#fff" : "#000" }} />
             </div>
           </div>
           <button onClick={handleSubmit} disabled={submitting || !form.vessel_name.trim() || !form.event_date}
-            style={{ marginTop: "14px", width: "100%", padding: "10px", borderRadius: "8px", background: NAVY, color: "#fff", border: "none", fontWeight: 700, fontSize: "13px", cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1 }}>
+            style={{ marginTop: "14px", width: "100%", padding: "10px", borderRadius: "8px", background: isDarkMode ? "#f59e3c" : NAVY, color: "#fff", border: "none", fontWeight: 700, fontSize: "13px", cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1 }}>
             {submitting ? "Saving..." : "💾 Log Movement"}
           </button>
         </div>
       )}
 
       {grouped.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "60px 20px", ...GLASS_STYLE, borderRadius: "14px" }}>
+        <div style={{ textAlign: "center", padding: "60px 20px", ...glassStyle, borderRadius: "14px" }}>
           <div style={{ fontSize: "40px", marginBottom: "12px" }}>🚢</div>
-          <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>No vessel movements logged</div>
+          <div style={{ fontSize: "16px", fontWeight: 600 }}>No vessel movements logged</div>
         </div>
       ) : grouped.map(v => (
-        <div key={`${v.vessel_name}-${v.voyage_number}`} style={{ ...GLASS_STYLE, borderRadius: "12px", marginBottom: "12px", overflow: "hidden" }}>
+        <div key={`${v.vessel_name}-${v.voyage_number}`} style={{ ...glassStyle, borderRadius: "12px", marginBottom: "12px", overflow: "hidden" }}>
           <div style={{ background: `linear-gradient(90deg, ${NAVY} 0%, ${NAVY2} 100%)`, padding: "12px 16px" }}>
             <div style={{ fontSize: "14px", fontWeight: 700, color: OFFWHITE }}>🛳 {v.vessel_name}</div>
             {v.voyage_number && <div style={{ fontSize: "11px", color: "rgba(240,237,240,0.7)", fontFamily: "'DM Mono', monospace", marginTop: "2px" }}>Voyage {v.voyage_number}</div>}
@@ -754,19 +755,19 @@ function VesselTab({ vesselMovements, uniqueVessels, onAdd, onDelete, isAdmin, s
             {v.events.map((e, i) => {
               const ev = getVesselEvent(e.event_type);
               return (
-                <div key={e.id} style={{ display: "flex", gap: "10px", padding: "10px", alignItems: "flex-start", borderBottom: i < v.events.length - 1 ? `1px solid rgba(0,0,0,0.05)` : "none" }}>
+                <div key={e.id} style={{ display: "flex", gap: "10px", padding: "10px", alignItems: "flex-start", borderBottom: i < v.events.length - 1 ? `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)"}` : "none" }}>
                   <div style={{ width: "30px", height: "30px", borderRadius: "50%", background: `${ev.color}15`, color: ev.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", flexShrink: 0 }}>{ev.icon}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                       <span style={{ fontSize: "13px", fontWeight: 700, color: ev.color }}>{ev.label}</span>
-                      {e.location && <span style={{ fontSize: "12px", color: MUTED }}>· 📍 {e.location}</span>}
+                      {e.location && <span style={{ fontSize: "12px", color: isDarkMode ? "#cbd5e0" : MUTED }}>· 📍 {e.location}</span>}
                     </div>
-                    <div style={{ fontSize: "11px", color: MUTED, marginTop: "2px" }}>
+                    <div style={{ fontSize: "11px", color: isDarkMode ? "#cbd5e0" : MUTED, marginTop: "2px" }}>
                       {formatDateTime(e.event_date)} 
                       {e.latitude && e.longitude && <span style={{ fontFamily: "'DM Mono', monospace", marginLeft: "6px" }}>(Lat: {e.latitude}, Lng: {e.longitude})</span>}
                     </div>
-                    {e.notes && <div style={{ fontSize: "12px", color: TEXT, marginTop: "4px", padding: "6px 8px", background: "rgba(255,255,255,0.5)", borderRadius: "4px" }}>{e.notes}</div>}
-                    {e.created_by_email && <div style={{ fontSize: "10px", color: MUTED, marginTop: "4px" }}>Logged by {e.created_by_email.split("@")[0]} • {timeAgo(e.created_at)}</div>}
+                    {e.notes && <div style={{ fontSize: "12px", marginTop: "4px", padding: "6px 8px", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.5)", borderRadius: "4px" }}>{e.notes}</div>}
+                    {e.created_by_email && <div style={{ fontSize: "10px", color: isDarkMode ? "#cbd5e0" : MUTED, marginTop: "4px" }}>Logged by {e.created_by_email.split("@")[0]} • {timeAgo(e.created_at)}</div>}
                   </div>
                   {isAdmin && (
                     <button onClick={() => onDelete(e.id)} style={{ background: "transparent", border: "none", color: "#c0392b", cursor: "pointer", fontSize: "12px", padding: "4px" }}>🗑️</button>
@@ -844,7 +845,7 @@ function PrintView({ containerNo, entries, meta, onClose }) {
 }
 
 // --- TEAM MANAGEMENT TAB COMPONENT ---
-function TeamTab({ isAdmin, userEmail }) {
+function TeamTab({ isAdmin, userEmail, glassStyle, isDarkMode }) {
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -887,15 +888,28 @@ function TeamTab({ isAdmin, userEmail }) {
     } catch (err) { alert(err.message); }
   };
 
+  // --- NEW FUNCTION: CHANGE ROLE ---
+  const handleRoleChange = async (targetUserId, email, newRole) => {
+    if (!window.confirm(`Change ${email}'s role to ${newRole.toUpperCase()}?`)) return;
+    try {
+      const { error } = await supabase.functions.invoke('admin-user-manager', {
+        body: { action: 'update_role', targetUserId, newRole }
+      });
+      if (error) throw error;
+      setTeam(prev => prev.map(u => u.id === targetUserId ? { ...u, role: newRole } : u));
+      alert(`${email} is now a ${newRole}.`);
+    } catch (err) { alert(err.message); }
+  };
+
   if (!isAdmin) return <div style={{ padding: "40px", textAlign: "center" }}>🔒 Access Denied</div>;
 
   return (
     <div style={{ animation: "fadeUp 0.3s ease" }}>
-      <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>👥 Team Management</h2>
-      <p style={{ fontSize: "12px", color: MUTED, marginBottom: "16px" }}>Admin only: Reset passwords or remove staff access.</p>
+      <h2 style={{ fontSize: "20px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, marginBottom: "4px" }}>👥 Team Management</h2>
+      <p style={{ fontSize: "12px", color: isDarkMode ? "#cbd5e0" : MUTED, marginBottom: "16px" }}>Admin only: Reset passwords, change roles, or remove staff access.</p>
       
       {loading ? <div style={{ textAlign: "center", padding: "20px" }}>Loading team members...</div> : (
-        <div style={{ ...GLASS_STYLE, borderRadius: "12px", overflow: "hidden" }}>
+        <div style={{ ...glassStyle, borderRadius: "12px", overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
               <tr style={{ background: NAVY, color: OFFWHITE, textAlign: "left" }}>
@@ -906,15 +920,38 @@ function TeamTab({ isAdmin, userEmail }) {
             </thead>
             <tbody>
               {team.map((user, i) => (
-                <tr key={user.id} style={{ borderBottom: i < team.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                <tr key={user.id} style={{ borderBottom: i < team.length - 1 ? `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : BORDER}` : "none" }}>
                   <td style={{ padding: "12px 16px", fontWeight: 500 }}>{user.email}</td>
                   <td style={{ padding: "12px 16px" }}>
-                    <Badge color={user.role === 'admin' ? 'amber' : 'navy'}>{user.role.toUpperCase()}</Badge>
+                    {/* UPDATED ROLE CELL */}
+                    {user.email === userEmail ? (
+                       <Badge color="amber">ADMIN (YOU)</Badge>
+                    ) : (
+                      <select 
+                        value={user.role} 
+                        onChange={(e) => handleRoleChange(user.id, user.email, e.target.value)}
+                        style={{ 
+                          padding: "4px 8px", 
+                          borderRadius: "4px", 
+                          fontSize: "11px", 
+                          fontWeight: 700, 
+                          border: `1px solid ${user.role === 'admin' ? '#f5d090' : '#a8b8e0'}`, 
+                          background: user.role === 'admin' ? 'rgba(168,92,0,0.1)' : 'rgba(13,30,60,0.1)', 
+                          color: user.role === 'admin' ? '#7a4f00' : NAVY,
+                          cursor: "pointer",
+                          outline: "none",
+                          textTransform: "uppercase",
+                          fontFamily: "'DM Mono', monospace"
+                        }}>
+                        <option value="staff">Staff</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    )}
                   </td>
                   <td style={{ padding: "12px 16px", textAlign: "right" }}>
                     {user.email !== userEmail && (
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                        <button onClick={() => handlePasswordReset(user.id, user.email)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "#fff", border: `1px solid ${BORDER}`, color: NAVY, cursor: "pointer" }}>🔑 Reset</button>
+                        <button onClick={() => handlePasswordReset(user.id, user.email)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: isDarkMode ? "rgba(255,255,255,0.1)" : "#fff", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.2)" : BORDER}`, color: isDarkMode ? "#fff" : NAVY, cursor: "pointer" }}>🔑 Reset</button>
                         <button onClick={() => handleRemoveUser(user.id, user.email)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "rgba(192,57,43,0.1)", border: "1px solid rgba(192,57,43,0.2)", color: "#c0392b", cursor: "pointer" }}>🗑️ Remove</button>
                       </div>
                     )}
@@ -929,7 +966,121 @@ function TeamTab({ isAdmin, userEmail }) {
   );
 }
 
+// --- PRICING & MARGIN CALCULATOR COMPONENT ---
+function PricingCalculator({ glassStyle, isDarkMode }) {
+  const [calcForm, setCalcForm] = useState({
+    route: "",
+    containerType: "20'",
+    buyOceanFreight: 0,
+    buyOriginCharges: 0,
+    buyDestCharges: 0,
+    buyCustoms: 0,
+    sellOceanFreight: 0,
+    sellOriginCharges: 0,
+    sellDestCharges: 0,
+    sellCustoms: 0,
+  });
+
+  const handleCalcChange = (field, value) => {
+    setCalcForm(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
+  };
+
+  const totalBuy = calcForm.buyOceanFreight + calcForm.buyOriginCharges + calcForm.buyDestCharges + calcForm.buyCustoms;
+  const totalSell = calcForm.sellOceanFreight + calcForm.sellOriginCharges + calcForm.sellDestCharges + calcForm.sellCustoms;
+  const netProfit = totalSell - totalBuy;
+  const marginPercent = totalSell > 0 ? ((netProfit / totalSell) * 100).toFixed(2) : 0;
+
+  const inputStyle = {
+    width: "100%", padding: "8px 12px", borderRadius: "6px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+    background: isDarkMode ? "rgba(255,255,255,0.05)" : "#fff", color: isDarkMode ? "#fff" : "#000", fontFamily: "'DM Mono', monospace"
+  };
+
+  const labelStyle = { display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, textTransform: "uppercase", marginBottom: "4px" };
+
+  return (
+    <div style={{ animation: "fadeUp 0.3s ease" }}>
+      <div style={{ marginBottom: "20px" }}>
+        <h2 style={{ fontSize: "20px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, margin: 0 }}>💰 Pricing & Margins</h2>
+        <p style={{ fontSize: "12px", color: isDarkMode ? "#cbd5e0" : MUTED, margin: "4px 0 0" }}>Calculate route profitability and quotes.</p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", alignItems: "start" }}>
+        
+        {/* LEFT COLUMN: INPUTS */}
+        <div style={{ ...glassStyle, borderRadius: "14px", padding: "20px" }}>
+          
+          <div style={{ marginBottom: "20px" }}>
+            <label style={labelStyle}>Route Reference</label>
+            <input type="text" placeholder="e.g. Kolkata to Jebel Ali" style={{...inputStyle, fontFamily: "inherit"}} 
+              onChange={e => setCalcForm(prev => ({ ...prev, route: e.target.value }))} />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" }}>
+            <div style={{ padding: "12px", background: "rgba(192,57,43,0.05)", borderRadius: "8px", border: "1px solid rgba(192,57,43,0.1)" }}>
+               <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#c0392b", marginBottom: "12px", borderBottom: "1px solid rgba(192,57,43,0.1)", paddingBottom: "4px" }}>Buy Rates (Costs)</h4>
+               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div><label style={labelStyle}>Ocean Freight</label><input type="number" style={inputStyle} value={calcForm.buyOceanFreight || ''} onChange={e => handleCalcChange("buyOceanFreight", e.target.value)} /></div>
+                  <div><label style={labelStyle}>Origin THC/Fees</label><input type="number" style={inputStyle} value={calcForm.buyOriginCharges || ''} onChange={e => handleCalcChange("buyOriginCharges", e.target.value)} /></div>
+                  <div><label style={labelStyle}>Dest. THC/Fees</label><input type="number" style={inputStyle} value={calcForm.buyDestCharges || ''} onChange={e => handleCalcChange("buyDestCharges", e.target.value)} /></div>
+                  <div><label style={labelStyle}>Customs/Misc</label><input type="number" style={inputStyle} value={calcForm.buyCustoms || ''} onChange={e => handleCalcChange("buyCustoms", e.target.value)} /></div>
+               </div>
+            </div>
+
+            <div style={{ padding: "12px", background: "rgba(21,128,61,0.05)", borderRadius: "8px", border: "1px solid rgba(21,128,61,0.1)" }}>
+               <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#15803d", marginBottom: "12px", borderBottom: "1px solid rgba(21,128,61,0.1)", paddingBottom: "4px" }}>Sell Rates (Revenue)</h4>
+               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div><label style={labelStyle}>Ocean Freight</label><input type="number" style={inputStyle} value={calcForm.sellOceanFreight || ''} onChange={e => handleCalcChange("sellOceanFreight", e.target.value)} /></div>
+                  <div><label style={labelStyle}>Origin THC/Fees</label><input type="number" style={inputStyle} value={calcForm.sellOriginCharges || ''} onChange={e => handleCalcChange("sellOriginCharges", e.target.value)} /></div>
+                  <div><label style={labelStyle}>Dest. THC/Fees</label><input type="number" style={inputStyle} value={calcForm.sellDestCharges || ''} onChange={e => handleCalcChange("sellDestCharges", e.target.value)} /></div>
+                  <div><label style={labelStyle}>Customs/Misc</label><input type="number" style={inputStyle} value={calcForm.sellCustoms || ''} onChange={e => handleCalcChange("sellCustoms", e.target.value)} /></div>
+               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: RESULTS */}
+        <div style={{ ...glassStyle, borderRadius: "14px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+           <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY }}>{calcForm.route || "Summary"}</h3>
+           
+           <div style={{ background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)", padding: "16px", borderRadius: "8px", display: "flex", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: "11px", color: MUTED, textTransform: "uppercase", fontWeight: 700 }}>Total Cost</div>
+                <div style={{ fontSize: "20px", color: "#c0392b", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>${totalBuy.toFixed(2)}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "11px", color: MUTED, textTransform: "uppercase", fontWeight: 700 }}>Total Revenue</div>
+                <div style={{ fontSize: "20px", color: "#15803d", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>${totalSell.toFixed(2)}</div>
+              </div>
+           </div>
+
+           <div style={{ background: netProfit >= 0 ? "rgba(21,128,61,0.1)" : "rgba(192,57,43,0.1)", border: `1px solid ${netProfit >= 0 ? "rgba(21,128,61,0.2)" : "rgba(192,57,43,0.2)"}`, padding: "20px", borderRadius: "12px", textAlign: "center" }}>
+              <div style={{ fontSize: "12px", color: netProfit >= 0 ? "#15803d" : "#c0392b", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em", marginBottom: "4px" }}>
+                Estimated Net Profit
+              </div>
+              <div style={{ fontSize: "36px", color: netProfit >= 0 ? "#1a5c32" : "#991b1b", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>
+                ${netProfit.toFixed(2)}
+              </div>
+              <div style={{ fontSize: "14px", color: netProfit >= 0 ? "#15803d" : "#c0392b", fontWeight: 600, marginTop: "4px", opacity: 0.8 }}>
+                Margin: {marginPercent}%
+              </div>
+           </div>
+
+           <button style={{ padding: "14px", background: NAVY, color: "#fff", borderRadius: "8px", border: "none", fontWeight: 700, cursor: "pointer", marginTop: "10px" }}>
+             💾 Save Quote
+           </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 export default function CargoApp({ session }) {
+  // --- ADDED: Theme & EasyPost State ---
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
+  const [fetchingRates, setFetchingRates] = useState(false);
+
+  // --- ORIGINAL STATES ---
   const [entries, setEntries] = useState([]);
   const [containerMeta, setContainerMeta] = useState({});
   const [activities, setActivities] = useState([]);
@@ -958,6 +1109,30 @@ export default function CargoApp({ session }) {
   const fullName = userEmail 
     ? userEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ') 
     : "User";
+
+  // --- ADDED: Theme Persistence Effect & Dynamic Style ---
+  const currentGlassStyle = useMemo(() => getGlassStyle(isDarkMode), [isDarkMode]);
+  
+  useEffect(() => {
+    localStorage.setItem("theme", isDarkMode ? "dark" : "light");
+  }, [isDarkMode]);
+
+  // --- ADDED: EasyPost Fetch Function ---
+  const fetchEasyPostRates = async () => {
+    if (!form.shipper || !form.consignee) return alert("Please enter Shipper and Consignee info first.");
+    setFetchingRates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-easypost-rates', {
+        body: { to_address: form.consignee, from_address: form.shipper, weight: parseFloat(form.cargo_weight) || 100 }
+      });
+      if (error) throw error;
+      setForm(f => ({ ...f, remarks: `${f.remarks || ''} [Auto-Rate: ${data.rate} ${data.currency}]`.trim() }));
+      showToast(`Fetched cheapest rate: ${data.rate} ${data.currency}`);
+    } catch (err) {
+      alert("EasyPost Error: " + err.message);
+    }
+    setFetchingRates(false);
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -1329,8 +1504,10 @@ export default function CargoApp({ session }) {
   return (
     <div style={{ 
       minHeight: "100vh", 
-      background: "radial-gradient(circle at top left, #e8eef8, transparent 40%), radial-gradient(circle at bottom right, #d0b0e0, transparent 40%), linear-gradient(135deg, #f0edf0 0%, #e0e8f7 100%)",
-      color: TEXT, 
+      // Dynamic Background for Dark Mode
+      background: isDarkMode ? "radial-gradient(circle at top left, #0d1e3c, #050a18)" : "radial-gradient(circle at top left, #e8eef8, transparent 40%), radial-gradient(circle at bottom right, #d0b0e0, transparent 40%), linear-gradient(135deg, #f0edf0 0%, #e0e8f7 100%)",
+      color: isDarkMode ? "#f0edf0" : TEXT, 
+      transition: "all 0.3s ease",
       fontFamily: "'DM Sans', 'Segoe UI', sans-serif" 
     }}>
       <style>{`
@@ -1365,54 +1542,36 @@ export default function CargoApp({ session }) {
                 </div>
                 
                 {isAdmin ? (
-                  <span style={{ 
-                    background: "rgba(245, 158, 60, 0.15)", 
-                    backdropFilter: "blur(8px)", 
-                    WebkitBackdropFilter: "blur(8px)", 
-                    color: "#f59e3c", 
-                    padding: "3px 8px", 
-                    borderRadius: "6px", 
-                    fontSize: "9px", 
-                    fontWeight: 800, 
-                    letterSpacing: "0.1em", 
-                    textTransform: "uppercase", 
-                    border: "1px solid rgba(245, 158, 60, 0.4)", 
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.1)" 
-                  }}>Admin</span>
+                  <span style={{ background: "rgba(245, 158, 60, 0.15)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", color: "#f59e3c", padding: "3px 8px", borderRadius: "6px", fontSize: "9px", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", border: "1px solid rgba(245, 158, 60, 0.4)", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>Admin</span>
                 ) : (
-                  <span style={{ 
-                    background: "rgba(255,255,255,0.1)", 
-                    backdropFilter: "blur(8px)", 
-                    WebkitBackdropFilter: "blur(8px)", 
-                    color: "rgba(255,255,255,0.8)", 
-                    padding: "3px 8px", 
-                    borderRadius: "6px", 
-                    fontSize: "9px", 
-                    fontWeight: 700, 
-                    letterSpacing: "0.1em", 
-                    textTransform: "uppercase", 
-                    border: "1px solid rgba(255,255,255,0.2)" 
-                  }}>Staff</span>
+                  <span style={{ background: "rgba(255,255,255,0.1)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", color: "rgba(255,255,255,0.8)", padding: "3px 8px", borderRadius: "6px", fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.2)" }}>Staff</span>
                 )}
               </div>
             </div>
           </div>
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            <button onClick={() => setShowMenu(!showMenu)} style={{ padding: "8px 12px", borderRadius: "8px", fontSize: "18px", cursor: "pointer", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: OFFWHITE, fontWeight: 700 }}>⋮</button>
-            {showMenu && (
-              <div style={{ position: "absolute", right: 0, top: "100%", marginTop: "8px", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", boxShadow: "0 4px 20px rgba(13,30,60,0.2)", zIndex: 200, minWidth: "240px", overflow: "hidden" }}>
-                <button onClick={() => { exportAllExcel(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left" }}>📊 Export All to Excel</button>
-                {!pushEnabled && <button onClick={() => { enablePush(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🔔 Enable Push Notifications</button>}
-                {pushEnabled && <div style={{ padding: "12px 14px", fontSize: "12px", color: "#15803d", borderTop: `1px solid ${BORDER}`, fontWeight: 600 }}>🔔 Notifications: ON</div>}
-                <button onClick={() => { handleLogout(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: "#c0392b", fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🚪 Log Out</button>
-              </div>
-            )}
+
+          {/* DARK MODE TOGGLE & MENU */}
+          <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+            <button onClick={() => setIsDarkMode(!isDarkMode)} style={{ background: "rgba(255,255,255,0.1)", border: "none", fontSize: "18px", cursor: "pointer", marginRight: "12px", padding: "8px", borderRadius: "8px" }}>
+              {isDarkMode ? "🌙" : "☀️"}
+            </button>
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowMenu(!showMenu)} style={{ padding: "8px 12px", borderRadius: "8px", fontSize: "18px", cursor: "pointer", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", color: OFFWHITE, fontWeight: 700 }}>⋮</button>
+              {showMenu && (
+                <div style={{ position: "absolute", right: 0, top: "100%", marginTop: "8px", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: "10px", boxShadow: "0 4px 20px rgba(13,30,60,0.2)", zIndex: 200, minWidth: "240px", overflow: "hidden" }}>
+                  <button onClick={() => { exportAllExcel(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left" }}>📊 Export All to Excel</button>
+                  {!pushEnabled && <button onClick={() => { enablePush(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: NAVY, fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🔔 Enable Push Notifications</button>}
+                  {pushEnabled && <div style={{ padding: "12px 14px", fontSize: "12px", color: "#15803d", borderTop: `1px solid ${BORDER}`, fontWeight: 600 }}>🔔 Notifications: ON</div>}
+                  <button onClick={() => { handleLogout(); setShowMenu(false); }} style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "12px 14px", border: "none", background: "#fff", color: "#c0392b", fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "left", borderTop: `1px solid ${BORDER}` }}>🚪 Log Out</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* 2. The Tabs */}
+        {/* TABS NAVIGATION */}
         <div style={{ 
-          ...GLASS_STYLE,
+          ...currentGlassStyle,
           borderRadius: "0 0 16px 16px",
           margin: "0 16px",
           display: "flex", gap: "16px", padding: "8px 20px 0", overflowX: "auto" 
@@ -1422,22 +1581,16 @@ export default function CargoApp({ session }) {
             ["log", `📦 Manifest (${Object.keys(grouped).length})`], 
             ["vessel", "🚢 Vessels"], 
             ["activity", "📜 Activity"], 
-            ["dashboard", "📊 Dashboard"]
+            ["dashboard", "📊 Dashboard"],
+            // --- ADDED THIS LINE ---
+            ["pricing", "💰 Pricing"]
           ].concat(isAdmin ? [["team", "👥 Team"]] : []).map(([tab, label]) => (
             <button key={tab} onClick={() => { setActiveTab(tab); if (tab === "entry" && !editId) { setForm(initialForm); setErrors({}); } }}
               style={{
-                padding: "12px 4px", 
-                fontSize: "13px", 
-                fontWeight: 700, 
-                cursor: "pointer",
-                background: "transparent",
-                border: "none",
+                padding: "12px 4px", fontSize: "13px", fontWeight: 700, cursor: "pointer", background: "transparent", border: "none",
                 borderBottom: activeTab === tab ? "3px solid #f59e3c" : "3px solid transparent",
-                color: activeTab === tab ? NAVY : MUTED,
-                whiteSpace: "nowrap",
-                transition: "all 0.2s ease-in-out",
-                opacity: activeTab === tab ? 1 : 0.6,
-                marginBottom: "-1px"
+                color: activeTab === tab ? (isDarkMode ? "#f59e3c" : NAVY) : MUTED,
+                whiteSpace: "nowrap", transition: "all 0.2s ease-in-out", opacity: activeTab === tab ? 1 : 0.6, marginBottom: "-1px"
               }}>{label}</button>
           ))}
         </div>
@@ -1448,10 +1601,16 @@ export default function CargoApp({ session }) {
 
         {activeTab === "entry" && (
           <div>
-            <div style={{ marginBottom: "20px", textAlign: "center" }}>
-              <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>{editId ? "✏️ Edit Cargo Entry" : "📋 New Cargo Entry"}</h2>
+            <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ fontSize: "20px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, margin: 0 }}>{editId ? "✏️ Edit Cargo Entry" : "📋 New Cargo Entry"}</h2>
+              
+              {/* EASYPOST BUTTON */}
+              <button onClick={fetchEasyPostRates} disabled={fetchingRates} style={{ background: isDarkMode ? "#f59e3c" : NAVY, color: "#fff", padding: "8px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                {fetchingRates ? "⌛ Fetching Rates..." : "💰 Auto-Fetch Rates"}
+              </button>
             </div>
-            <div style={{ ...GLASS_STYLE, borderRadius: "14px", padding: "20px" }}>
+            
+            <div style={{ ...(isDarkMode ? { ...currentGlassStyle, background: "rgba(13, 30, 60, 0.45)", border: "1px solid rgba(255, 255, 255, 0.1)" } : currentGlassStyle), borderRadius: "14px", padding: "20px" }}>
               {!editId && <AIDocReader onExtracted={(data) => setForm(f => ({ ...f, ...data }))} />}
               {lclBannerEntry && (
                 <div style={{ background: "rgba(230,247,237,0.8)", border: "1px solid #9eddb8", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
@@ -1464,23 +1623,23 @@ export default function CargoApp({ session }) {
               )}
               
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                <Field label="Container No." field="container_no" placeholder="e.g. MSCU1234567" required half value={form.container_no} error={errors.container_no} onChange={handleFieldChange} />
-                <Field label="Shipper" field="shipper" placeholder="Shipper name" required half value={form.shipper} error={errors.shipper} onChange={handleFieldChange} listId="shippers-list" list={uniqueShippers} />
-                <Field label="Consignee" field="consignee" placeholder="Consignee name" required half value={form.consignee} error={errors.consignee} onChange={handleFieldChange} listId="consignees-list" list={uniqueConsignees} />
-                <Field label="Goods Description" field="goods_description" placeholder="Describe goods" required half value={form.goods_description} error={errors.goods_description} onChange={handleFieldChange} />
-                <Field label="Quantity" field="quantity" placeholder="e.g. 10 Boxes" half value={form.quantity} error={errors.quantity} onChange={handleFieldChange} />
-                <Field label="Cargo Weight" field="cargo_weight" placeholder="e.g. 1200 Kgs" half value={form.cargo_weight} error={errors.cargo_weight} onChange={handleFieldChange} />
+                <Field label="Container No." field="container_no" placeholder="e.g. MSCU1234567" required half value={form.container_no} error={errors.container_no} onChange={handleFieldChange} isDarkMode={isDarkMode} />
+                <Field label="Shipper" field="shipper" placeholder="Shipper name" required half value={form.shipper} error={errors.shipper} onChange={handleFieldChange} listId="shippers-list" list={uniqueShippers} isDarkMode={isDarkMode} />
+                <Field label="Consignee" field="consignee" placeholder="Consignee name" required half value={form.consignee} error={errors.consignee} onChange={handleFieldChange} listId="consignees-list" list={uniqueConsignees} isDarkMode={isDarkMode} />
+                <Field label="Goods Description" field="goods_description" placeholder="Describe goods" required half value={form.goods_description} error={errors.goods_description} onChange={handleFieldChange} isDarkMode={isDarkMode} />
+                <Field label="Quantity" field="quantity" placeholder="e.g. 10 Boxes" half value={form.quantity} error={errors.quantity} onChange={handleFieldChange} isDarkMode={isDarkMode} />
+                <Field label="Cargo Weight" field="cargo_weight" placeholder="e.g. 1200 Kgs" half value={form.cargo_weight} error={errors.cargo_weight} onChange={handleFieldChange} isDarkMode={isDarkMode} />
                 
                 <div style={{ gridColumn: "span 1" }}>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>Container Size</label>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>Container Size</label>
                   <div style={{ display: "flex", gap: "4px" }}>
                     {CONTAINER_SIZES.map(opt => (
                       <button key={opt} type="button" onClick={() => handleFieldChange("container_size", form.container_size === opt ? "" : opt)}
                         style={{
                           flex: 1, padding: "9px 2px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
-                          background: form.container_size === opt ? NAVY : "rgba(255,255,255,0.7)",
-                          color: form.container_size === opt ? "#fff" : NAVY,
-                          border: `1px solid ${form.container_size === opt ? NAVY : "rgba(255,255,255,0.8)"}`,
+                          background: form.container_size === opt ? NAVY : (isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)"),
+                          color: form.container_size === opt ? "#fff" : (isDarkMode ? "#cbd5e0" : NAVY),
+                          border: `1px solid ${form.container_size === opt ? NAVY : (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)")}`,
                           cursor: "pointer", fontFamily: "'DM Mono', monospace", transition: "all 0.2s"
                         }}>{opt}</button>
                     ))}
@@ -1488,42 +1647,42 @@ export default function CargoApp({ session }) {
                 </div>
 
                 <div style={{ gridColumn: "span 1" }}>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>Load Type</label>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>Load Type</label>
                   <div style={{ display: "flex", gap: "4px" }}>
                     {["", "FCL", "LCL"].map(opt => (
                       <button key={opt} type="button" onClick={() => handleFieldChange("load_type", opt)}
                         style={{
                           flex: 1, padding: "9px 4px", borderRadius: "8px", fontSize: "11px", fontWeight: 600,
-                          background: form.load_type === opt ? NAVY : "rgba(255,255,255,0.7)",
-                          color: form.load_type === opt ? "#fff" : NAVY,
-                          border: `1px solid ${form.load_type === opt ? NAVY : "rgba(255,255,255,0.8)"}`,
+                          background: form.load_type === opt ? NAVY : (isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)"),
+                          color: form.load_type === opt ? "#fff" : (isDarkMode ? "#cbd5e0" : NAVY),
+                          border: `1px solid ${form.load_type === opt ? NAVY : (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)")}`,
                           cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s"
                         }}>{opt || "Auto"}</button>
                     ))}
                   </div>
                 </div>
 
-                <Field label="Vehicle Number" field="vehicle_number" placeholder="e.g. WB12AB3456" half value={form.vehicle_number} error={errors.vehicle_number} onChange={handleFieldChange} />
-                <Field label="Seal No." field="seal_no" placeholder="e.g. SL123456" half value={form.seal_no} error={errors.seal_no} onChange={handleFieldChange} />
-                <Field label="GST Number" field="gst_number" placeholder="e.g. 19AABCK..." half value={form.gst_number} error={errors.gst_number} onChange={handleFieldChange} />
-                <Field label="E-Way Bill Number" field="eway_bill" placeholder="e.g. 331234..." half value={form.eway_bill} error={errors.eway_bill} onChange={handleFieldChange} />
-                <Field label="Booking Date" field="booking_date" type="date" half value={form.booking_date} error={errors.booking_date} onChange={handleFieldChange} />
-                <Field label="E-Way Valid Till" field="eway_valid_till" type="date" half value={form.eway_valid_till} error={errors.eway_valid_till} onChange={handleFieldChange} />
+                <Field label="Vehicle Number" field="vehicle_number" placeholder="e.g. WB12AB3456" half value={form.vehicle_number} error={errors.vehicle_number} onChange={handleFieldChange} isDarkMode={isDarkMode} />
+                <Field label="Seal No." field="seal_no" placeholder="e.g. SL123456" half value={form.seal_no} error={errors.seal_no} onChange={handleFieldChange} isDarkMode={isDarkMode} />
+                <Field label="GST Number" field="gst_number" placeholder="e.g. 19AABCK..." half value={form.gst_number} error={errors.gst_number} onChange={handleFieldChange} isDarkMode={isDarkMode} />
+                <Field label="E-Way Bill Number" field="eway_bill" placeholder="e.g. 331234..." half value={form.eway_bill} error={errors.eway_bill} onChange={handleFieldChange} isDarkMode={isDarkMode} />
+                <Field label="Booking Date" field="booking_date" type="date" half value={form.booking_date} error={errors.booking_date} onChange={handleFieldChange} isDarkMode={isDarkMode} />
+                <Field label="E-Way Valid Till" field="eway_valid_till" type="date" half value={form.eway_valid_till} error={errors.eway_valid_till} onChange={handleFieldChange} isDarkMode={isDarkMode} />
                 
-                <PillSelector label="💰 Freight" value={form.freight_status}
+                <PillSelector label="💰 Freight" value={form.freight_status} isDarkMode={isDarkMode}
                   onChange={(v) => handleFieldChange("freight_status", v)}
                   options={FREIGHT_STATUSES.map(s => ({ value: s.id, label: s.label, color: s.color }))} />
-                <PillSelector label="💳 Payment" value={form.payment_status}
+                <PillSelector label="💳 Payment" value={form.payment_status} isDarkMode={isDarkMode}
                   onChange={(v) => handleFieldChange("payment_status", v)}
                   options={PAYMENT_STATUSES.map(s => ({ value: s.id, label: s.label, color: s.color }))} />
                 
-                <Field label="Vessel Name" field="vessel_name" placeholder="e.g. MV APJ Karan 2" half value={form.vessel_name} error={errors.vessel_name} onChange={handleFieldChange} listId="vessels-list" list={uniqueVessels} />
-                <Field label="Voyage Number" field="voyage_number" placeholder="e.g. 024" half value={form.voyage_number} error={errors.voyage_number} onChange={handleFieldChange} />
+                <Field label="Vessel Name" field="vessel_name" placeholder="e.g. MV APJ Karan 2" half value={form.vessel_name} error={errors.vessel_name} onChange={handleFieldChange} listId="vessels-list" list={uniqueVessels} isDarkMode={isDarkMode} />
+                <Field label="Voyage Number" field="voyage_number" placeholder="e.g. 024" half value={form.voyage_number} error={errors.voyage_number} onChange={handleFieldChange} isDarkMode={isDarkMode} />
                 
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>📝 Remarks (Optional)</label>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px", textAlign: "center" }}>📝 Remarks (Optional)</label>
                   <textarea value={form.remarks || ""} onChange={e => handleFieldChange("remarks", e.target.value)} placeholder="e.g. Fragile, hold for inspection..." rows={2}
-                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.8)`, color: TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, color: isDarkMode ? "#fff" : TEXT, fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
                 </div>
               </div>
 
@@ -1531,7 +1690,7 @@ export default function CargoApp({ session }) {
                 <button onClick={handleSubmit} style={{ flex: 1, padding: "14px", borderRadius: "10px", fontSize: "15px", fontWeight: 700, background: "linear-gradient(135deg, #f59e3c 0%, #d87c1e 100%)", border: "none", color: "#fff", cursor: "pointer", letterSpacing: "0.03em", boxShadow: "0 4px 12px rgba(245, 158, 60, 0.3)" }}>
                   {editId ? "✅ Update Entry" : "💾 Save Cargo Entry"}
                 </button>
-                {editId && <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); }} style={{ padding: "14px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, background: "rgba(255,255,255,0.8)", border: `1px solid rgba(255,255,255,0.9)`, color: MUTED, cursor: "pointer" }}>Cancel</button>}
+                {editId && <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); }} style={{ padding: "14px 20px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.9)"}`, color: isDarkMode ? "#fff" : MUTED, cursor: "pointer" }}>Cancel</button>}
               </div>
             </div>
           </div>
@@ -1541,8 +1700,8 @@ export default function CargoApp({ session }) {
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
               <div>
-                <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>Manifest Log</h2>
-                <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>{filteredKeys.length} of {Object.keys(grouped).length} containers shown</p>
+                <h2 style={{ fontSize: "20px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, margin: 0 }}>Manifest Log</h2>
+                <p style={{ fontSize: "12px", color: isDarkMode ? "#a0aec0" : MUTED, margin: "4px 0 0" }}>{filteredKeys.length} of {Object.keys(grouped).length} containers shown</p>
               </div>
               <button onClick={() => { setForm(initialForm); setEditId(null); setErrors({}); setActiveTab("entry"); }} style={{ padding: "9px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY2} 100%)`, border: "none", color: OFFWHITE, cursor: "pointer", boxShadow: "0 4px 12px rgba(13,30,60,0.15)" }}>+ New Entry</button>
             </div>
@@ -1569,44 +1728,44 @@ export default function CargoApp({ session }) {
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: MUTED, fontSize: "14px" }}>🔍</span>
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search container, vehicle, shipper..." style={{ width: "100%", padding: "11px 14px 11px 38px", borderRadius: "10px", background: "rgba(255,255,255,0.7)", border: `1px solid rgba(255,255,255,0.9)`, color: TEXT, fontSize: "14px", outline: "none", backdropFilter: "blur(4px)" }} />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search container, vehicle, shipper..." style={{ width: "100%", padding: "11px 14px 11px 38px", borderRadius: "10px", background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.9)"}`, color: isDarkMode ? "#fff" : TEXT, fontSize: "14px", outline: "none", backdropFilter: "blur(4px)" }} />
               </div>
-              <button onClick={() => setShowFilters(!showFilters)} style={{ padding: "11px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, background: showFilters ? NAVY : "rgba(255,255,255,0.7)", border: `1px solid ${showFilters ? NAVY : "rgba(255,255,255,0.9)"}`, color: showFilters ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>🔧 {(statusFilter !== "all" || dateFromFilter || dateToFilter) ? "•" : ""} Filters</button>
+              <button onClick={() => setShowFilters(!showFilters)} style={{ padding: "11px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, background: showFilters ? NAVY : (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.7)"), border: `1px solid ${showFilters ? NAVY : (isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.9)")}`, color: showFilters ? "#fff" : (isDarkMode ? "#fff" : NAVY), cursor: "pointer", whiteSpace: "nowrap" }}>🔧 {(statusFilter !== "all" || dateFromFilter || dateToFilter) ? "•" : ""} Filters</button>
             </div>
 
             {showFilters && (
-              <div style={{ ...GLASS_STYLE, borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
+              <div style={{ ...currentGlassStyle, borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                   <div>
-                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>From Date</label>
-                    <input type="date" value={dateFromFilter} onChange={e => setDateFromFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", color: TEXT, background: "rgba(255,255,255,0.7)" }} />
+                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>From Date</label>
+                    <input type="date" value={dateFromFilter} onChange={e => setDateFromFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, fontSize: "13px", color: isDarkMode ? "#fff" : TEXT, background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)" }} />
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>To Date</label>
-                    <input type="date" value={dateToFilter} onChange={e => setDateToFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid rgba(255,255,255,0.8)`, fontSize: "13px", color: TEXT, background: "rgba(255,255,255,0.7)" }} />
+                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>To Date</label>
+                    <input type="date" value={dateToFilter} onChange={e => setDateToFilter(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)"}`, fontSize: "13px", color: isDarkMode ? "#fff" : TEXT, background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)" }} />
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Status</label>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: isDarkMode ? "#cbd5e0" : NAVY2, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Status</label>
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    <button onClick={() => setStatusFilter("all")} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === "all" ? NAVY : "rgba(255,255,255,0.7)", color: statusFilter === "all" ? "#fff" : NAVY, border: `1px solid ${statusFilter === "all" ? NAVY : "rgba(255,255,255,0.8)"}`, cursor: "pointer" }}>All</button>
+                    <button onClick={() => setStatusFilter("all")} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === "all" ? NAVY : (isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)"), color: statusFilter === "all" ? "#fff" : (isDarkMode ? "#cbd5e0" : NAVY), border: `1px solid ${statusFilter === "all" ? NAVY : (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)")}`, cursor: "pointer" }}>All</button>
                     {STATUSES.map(s => (
-                      <button key={s.id} onClick={() => setStatusFilter(s.id)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === s.id ? s.color : "rgba(255,255,255,0.7)", color: statusFilter === s.id ? "#fff" : s.color, border: `1px solid ${statusFilter === s.id ? s.color : "rgba(255,255,255,0.8)"}`, cursor: "pointer" }}>{s.icon} {s.label}</button>
+                      <button key={s.id} onClick={() => setStatusFilter(s.id)} style={{ padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: statusFilter === s.id ? s.color : (isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.7)"), color: statusFilter === s.id ? "#fff" : s.color, border: `1px solid ${statusFilter === s.id ? s.color : (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)")}`, cursor: "pointer" }}>{s.icon} {s.label}</button>
                     ))}
                   </div>
                 </div>
-                {(dateFromFilter || dateToFilter || statusFilter !== "all") && <button onClick={() => { setDateFromFilter(""); setDateToFilter(""); setStatusFilter("all"); }} style={{ marginTop: "10px", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "rgba(255,255,255,0.8)", border: `1px solid rgba(255,255,255,0.9)`, color: MUTED, cursor: "pointer" }}>✕ Clear filters</button>}
+                {(dateFromFilter || dateToFilter || statusFilter !== "all") && <button onClick={() => { setDateFromFilter(""); setDateToFilter(""); setStatusFilter("all"); }} style={{ marginTop: "10px", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.9)"}`, color: isDarkMode ? "#fff" : MUTED, cursor: "pointer" }}>✕ Clear filters</button>}
               </div>
             )}
 
             {filteredKeys.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 20px", ...GLASS_STYLE, borderRadius: "14px" }}>
+              <div style={{ textAlign: "center", padding: "60px 20px", ...currentGlassStyle, borderRadius: "14px" }}>
                 <div style={{ fontSize: "40px", marginBottom: "12px" }}>📭</div>
-                <div style={{ fontSize: "16px", color: NAVY, fontWeight: 600 }}>{search || statusFilter !== "all" || dateFromFilter || dateToFilter ? "No results found" : "No cargo entries yet"}</div>
+                <div style={{ fontSize: "16px", color: isDarkMode ? "#fff" : NAVY, fontWeight: 600 }}>{search || statusFilter !== "all" || dateFromFilter || dateToFilter ? "No results found" : "No cargo entries yet"}</div>
               </div>
             ) : filteredKeys.map(key => (
               <ContainerCard key={key} containerNo={key} entries={grouped[key]} meta={containerMeta[key]}
-                userEmail={userEmail} isAdmin={isAdmin}
+                userEmail={userEmail} isAdmin={isAdmin} glassStyle={currentGlassStyle} isDarkMode={isDarkMode}
                 onEdit={handleEdit} onDelete={handleDelete} onUpdateStatus={updateContainerStatus}
                 onPrint={setPrintContainer} onExportContainer={exportContainerExcel}
                 onUpdateLoadType={updateContainerLoadType} />
@@ -1614,41 +1773,43 @@ export default function CargoApp({ session }) {
           </div>
         )}
 
-        {activeTab === "vessel" && <VesselTab vesselMovements={vesselMovements} uniqueVessels={uniqueVessels} onAdd={addVesselMovement} onDelete={deleteVesselMovement} isAdmin={isAdmin} showToast={showToast} />}
+        {activeTab === "vessel" && <VesselTab vesselMovements={vesselMovements} uniqueVessels={uniqueVessels} onAdd={addVesselMovement} onDelete={deleteVesselMovement} isAdmin={isAdmin} showToast={showToast} glassStyle={currentGlassStyle} isDarkMode={isDarkMode} />}
 
         {activeTab === "activity" && (
           <div>
             <div style={{ marginBottom: "20px" }}>
-              <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>📜 Activity Log</h2>
-              <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>Live timeline of all team actions</p>
+              <h2 style={{ fontSize: "20px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, margin: 0 }}>📜 Activity Log</h2>
+              <p style={{ fontSize: "12px", color: isDarkMode ? "#a0aec0" : MUTED, margin: "4px 0 0" }}>Live timeline of all team actions</p>
             </div>
-            <ActivityTab activities={activities} />
+            <ActivityTab activities={activities} glassStyle={currentGlassStyle} isDarkMode={isDarkMode} />
           </div>
         )}
 
         {activeTab === "dashboard" && (
           <div>
             <div style={{ marginBottom: "20px" }}>
-              <h2 style={{ fontSize: "20px", fontWeight: 700, color: NAVY, margin: 0 }}>📊 Dashboard</h2>
-              <p style={{ fontSize: "12px", color: MUTED, margin: "4px 0 0" }}>Operations overview · Live across all staff</p>
+              <h2 style={{ fontSize: "20px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, margin: 0 }}>📊 Dashboard</h2>
+              <p style={{ fontSize: "12px", color: isDarkMode ? "#a0aec0" : MUTED, margin: "4px 0 0" }}>Operations overview · Live across all staff</p>
             </div>
-            <Dashboard entries={entries} containerMeta={containerMeta} />
+            <Dashboard entries={entries} containerMeta={containerMeta} glassStyle={currentGlassStyle} isDarkMode={isDarkMode} />
           </div>
         )}
 
-        {activeTab === "team" && isAdmin && <TeamTab isAdmin={isAdmin} userEmail={userEmail} />}
+        {activeTab === "team" && isAdmin && <TeamTab isAdmin={isAdmin} userEmail={userEmail} glassStyle={currentGlassStyle} isDarkMode={isDarkMode} />}
       </div>
+      {/* --- ADDED THIS BLOCK --- */}
+        {activeTab === "pricing" && <PricingCalculator glassStyle={currentGlassStyle} isDarkMode={isDarkMode} />}
 
       {pushPrompt && (
-        <div style={{ position: "fixed", bottom: "16px", left: "16px", right: "16px", maxWidth: "440px", margin: "0 auto", ...GLASS_STYLE, borderRadius: "12px", padding: "16px", zIndex: 500, animation: "fadeUp 0.3s ease" }}>
+        <div style={{ position: "fixed", bottom: "16px", left: "16px", right: "16px", maxWidth: "440px", margin: "0 auto", ...currentGlassStyle, borderRadius: "12px", padding: "16px", zIndex: 500, animation: "fadeUp 0.3s ease" }}>
           <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
             <div style={{ fontSize: "24px" }}>🔔</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>Get notified instantly</div>
-              <div style={{ fontSize: "12px", color: MUTED, marginBottom: "10px" }}>Be alerted when teammates add new cargo, even when the app is closed.</div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, marginBottom: "4px" }}>Get notified instantly</div>
+              <div style={{ fontSize: "12px", color: isDarkMode ? "#cbd5e0" : MUTED, marginBottom: "10px" }}>Be alerted when teammates add new cargo, even when the app is closed.</div>
               <div style={{ display: "flex", gap: "6px" }}>
                 <button onClick={enablePush} style={{ padding: "7px 14px", borderRadius: "6px", background: NAVY, color: "#fff", border: "none", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>Enable</button>
-                <button onClick={dismissPushPrompt} style={{ padding: "7px 14px", borderRadius: "6px", background: "rgba(255,255,255,0.8)", color: MUTED, border: `1px solid rgba(255,255,255,0.9)`, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>Not now</button>
+                <button onClick={dismissPushPrompt} style={{ padding: "7px 14px", borderRadius: "6px", background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.8)", color: isDarkMode ? "#fff" : MUTED, border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.9)"}`, fontWeight: 600, fontSize: "12px", cursor: "pointer" }}>Not now</button>
               </div>
             </div>
           </div>
@@ -1663,12 +1824,12 @@ export default function CargoApp({ session }) {
 
       {deleteConfirm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(13,30,60,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "20px" }}>
-          <div style={{ ...GLASS_STYLE, borderRadius: "14px", padding: "28px", maxWidth: "360px", width: "100%", textAlign: "center" }}>
+          <div style={{ ...currentGlassStyle, borderRadius: "14px", padding: "28px", maxWidth: "360px", width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: "32px", marginBottom: "12px" }}>⚠️</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Delete Entry?</div>
-            <div style={{ fontSize: "13px", color: MUTED, marginBottom: "24px" }}>This cannot be undone.</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: isDarkMode ? "#fff" : NAVY, marginBottom: "8px" }}>Delete Entry?</div>
+            <div style={{ fontSize: "13px", color: isDarkMode ? "#cbd5e0" : MUTED, marginBottom: "24px" }}>This cannot be undone.</div>
             <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
-              <button onClick={() => setDeleteConfirm(null)} style={{ padding: "10px 20px", borderRadius: "8px", border: `1px solid rgba(255,255,255,0.8)`, background: "rgba(255,255,255,0.7)", color: MUTED, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+              <button onClick={() => setDeleteConfirm(null)} style={{ padding: "10px 20px", borderRadius: "8px", border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.8)"}`, background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.7)", color: isDarkMode ? "#fff" : MUTED, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
               <button onClick={confirmDelete} style={{ padding: "10px 20px", borderRadius: "8px", border: "1px solid #f5b8b0", background: "rgba(253,236,234,0.9)", color: "#c0392b", cursor: "pointer", fontWeight: 600 }}>Delete</button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.23.0"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,47 +7,49 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    // 1. Initialize Supabase Admin Client using the Service Role Key
-    const supabaseAdmin = createClient(
+    const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // 2. Verify the user making the request is actually an Admin
+    // Verify the caller is an admin
     const authHeader = req.headers.get('Authorization')!
     const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
-    
-    if (userError || !user) throw new Error('Unauthorized request.')
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
+    if (userError || !user) throw new Error('Unauthorized')
 
-    const { data: roleData } = await supabaseAdmin.from('user_roles').select('role').eq('user_id', user.id).single()
-    if (roleData?.role !== 'admin') throw new Error('Permission denied. Admin access required.')
+    const { data: roleData } = await supabaseClient.from('user_roles').select('role').eq('user_id', user.id).single()
+    if (roleData?.role !== 'admin') throw new Error('Requires admin privileges')
 
-    // 3. Parse the action from the React frontend
-    const { action, targetUserId, newPassword } = await req.json()
+    // Parse the request
+    const { action, targetUserId, newPassword, newRole } = await req.json()
 
-    // 4. Execute the requested Admin Action
-    if (action === 'delete_user') {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(targetUserId)
-      if (error) throw error;
-      return new Response(JSON.stringify({ message: 'User deleted successfully.' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    } 
-    
     if (action === 'reset_password') {
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, { password: newPassword })
-      if (error) throw error;
-      return new Response(JSON.stringify({ message: 'Password updated successfully.' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      const { error } = await supabaseClient.auth.admin.updateUserById(targetUserId, { password: newPassword })
+      if (error) throw error
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
     }
 
-    throw new Error('Invalid action provided.')
+    if (action === 'delete_user') {
+      const { error } = await supabaseClient.auth.admin.deleteUser(targetUserId)
+      if (error) throw error
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+    }
 
+    // --- NEW ACTION: UPDATE ROLE ---
+    if (action === 'update_role') {
+      if (newRole !== 'admin' && newRole !== 'staff') throw new Error('Invalid role');
+      
+      const { error } = await supabaseClient.from('user_roles').update({ role: newRole }).eq('user_id', targetUserId)
+      if (error) throw error
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+    }
+
+    throw new Error('Invalid action')
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify({ error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 })
   }
 })
