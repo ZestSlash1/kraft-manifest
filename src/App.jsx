@@ -30,27 +30,41 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: "#f0edf0", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", fontFamily: "sans-serif" }}>
-        
-        {/* Hidden SVG Filter required for the gooey melt effect */}
-        <svg style={{ position: "absolute", width: 0, height: 0 }}>
-          <defs>
-            <filter id="gooey-filter">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
-              <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
-              <feBlend in="SourceGraphic" in2="goo" />
-            </filter>
-          </defs>
-        </svg>
-
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0d1e3c 0%, #1a3a6a 100%)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", fontFamily: "'DM Sans', sans-serif" }}>
         <div style={{ textAlign: "center" }}>
-          <div className="goo-container">
-            <div className="goo-blob blob-1"></div>
-            <div className="goo-blob blob-2"></div>
-            <div className="goo-blob blob-3"></div>
+          {/* Logo with pulsing glow */}
+          <div style={{ position: "relative", marginBottom: "24px" }}>
+            <div style={{ position: "absolute", width: "80px", height: "80px", borderRadius: "50%", background: "rgba(245, 158, 60, 0.3)", filter: "blur(20px)", animation: "pulse 2s infinite" }}></div>
+            <img src="/kraft-logo.png" alt="Kraft" style={{ width: "80px", height: "80px", objectFit: "contain", borderRadius: "16px", position: "relative", zIndex: 1 }} />
           </div>
-          <div style={{ color: "#5a6a7a", fontSize: "14px", fontWeight: 600, letterSpacing: "0.05em" }}></div>
+
+          {/* Animated text */}
+          <div style={{ color: "#f0edf0", fontSize: "18px", fontWeight: 700, letterSpacing: "0.1em", marginBottom: "20px" }}>KRAFT MANIFEST</div>
+
+          {/* Spinner */}
+          <div style={{ display: "flex", justifyContent: "center", gap: "6px" }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{
+                width: "8px", height: "8px", borderRadius: "50%",
+                background: "#f59e3c",
+                animation: `bounce 1.2s ease-in-out ${i * 0.15}s infinite`
+              }} />
+            ))}
+          </div>
+
+          <div style={{ color: "rgba(240,237,240,0.6)", fontSize: "13px", fontWeight: 500, marginTop: "16px", letterSpacing: "0.05em" }}>Loading...</div>
         </div>
+
+        <style>{`
+          @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+          }
+        `}</style>
       </div>
     );
   }
